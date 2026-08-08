@@ -13,7 +13,7 @@
 推荐采用“确定性业务内核 + 智能创作 Agent + 供应商适配器”的三层结构：
 
 1. **确定性业务内核**负责鉴权、参数终审、点数、幂等、任务状态、密钥、队列与结果权限。
-2. **创作 Agent**负责理解意图、分析素材、编译提示词、推荐模型与参数、生成创作方案和质量报告。
+2. **创作 Agent**负责理解意图、分析素材、编译提示词、补全适配当前模型的生成方案和质量报告。
 3. **供应商适配器**把统一 `GenerationSpec` 转换为 Seedance、Vidu 等供应商请求，并归一化状态与错误。
 
 第一版无需建设复杂多 Agent。建议先实现单个“创作规划 Agent”，以结构化 JSON 输出为核心；任务执行仍由确定性 Orchestrator 完成。
@@ -28,8 +28,8 @@ flowchart LR
   POLICY --> WALLET[钱包预留与任务事务]
   WALLET --> OUTBOX[Outbox / Queue]
   OUTBOX --> WORKER[Orchestrator Worker]
-  WORKER --> ROUTER[Model Router]
-  ROUTER --> ADAPTER[Provider Adapter]
+  WORKER --> RESOLVER[Selected Model Resolver]
+  RESOLVER --> ADAPTER[Provider Adapter]
   ADAPTER --> MODEL[视频/图片模型]
   MODEL --> EVAL[Quality Evaluator]
   EVAL --> RESULT[结果存储与签名]
@@ -43,7 +43,7 @@ flowchart LR
 - 对参考图片或视频生成描述、主体约束和风格特征。
 - 将自然语言编译成供应商无关的结构化生成方案。
 - 生成正向提示词、负向提示词、镜头和运动建议。
-- 根据能力、质量、价格、可用性推荐候选模型。
+- 根据用户选定模型的能力补全和优化提示词、镜头及参数建议。
 - 对生成结果做一致性和技术质量评估。
 - 输出失败原因解释和下一次生成建议。
 
@@ -86,7 +86,7 @@ sequenceDiagram
   W->>A: POST /tasks + prompt/assets/parameters
   A->>A: 鉴权、幂等、素材和基础参数校验
   A->>C: 生成 GenerationSpec
-  C-->>A: 结构化创作方案 + 候选模型
+  C-->>A: 适配选定模型的结构化创作方案
   A->>A: 能力、计价、策略终审
   A->>D: 事务：预留点数、任务、Spec、Outbox
   D-->>A: 提交成功
@@ -99,8 +99,9 @@ sequenceDiagram
 
 Agent 超时或不可用时的默认策略：
 
-- 用户明确手动选择模型且参数完整：允许按“直通编译器”降级，生成基础 `GenerationSpec`。
-- 用户选择“智能匹配”：返回可重试错误，不得随机选择供应商。
+- 如果提示词优化属于可选增强：允许按“直通编译器”降级，基于用户已选模型生成基础 `GenerationSpec`。
+- 如果当前任务明确要求 Agent 规划结果：返回可重试错误，不创建任务、不扣点。
+- 任何降级场景都不得静默切换用户选择的 Provider 或模型。
 - Agent 失败不得造成扣点和任务半创建。
 
 ### 3.2 创作方案预览链路（可选）
@@ -150,12 +151,10 @@ Agent 不应直接输出某个供应商的最终请求体，而应输出供应�
     "sound": true,
     "watermark": null
   },
-  "routing": {
-    "mode": "auto",
-    "preferred_provider_id": null,
-    "quality_priority": 0.7,
-    "cost_priority": 0.2,
-    "speed_priority": 0.1
+  "model_selection": {
+    "source": "user_selected",
+    "provider_id": "provider_01H...",
+    "model_id": "seedance-1-0-pro"
   },
   "cost_guard": {
     "max_points": 32,
@@ -170,7 +169,7 @@ Agent 不应直接输出某个供应商的最终请求体，而应输出供应�
 - `schema_version` 必填，后端支持向后兼容和迁移。
 - 保存原始提示词、优化提示词、Spec 和最终供应商请求快照的版本关系。
 - 不在 Spec 中保存解密后的密钥、签名 URL、用户内部 ID 或敏感日志字段。
-- Agent 生成的模型建议不能替代后端 Provider 所有权和启用状态校验。
+- Agent 不得修改 `model_selection`；后端必须终审 Provider 所有权、启用状态和模型能力。
 
 ## 5. Agent 子能力设计
 
@@ -200,32 +199,22 @@ Agent 不应直接输出某个供应商的最终请求体，而应输出供应�
 
 提示词模板必须版本化，记录 `agent_model`、`prompt_template_version` 和输出哈希，便于复现和回归。
 
-### 5.3 Model Router
+### 5.3 Selected Model Resolver
 
-模型路由不能只由 LLM 自由判断，应采用“硬约束过滤 + 可解释评分”。
+当前产品由前端用户明确选择 Provider 和模型，因此后端不做模型推荐、评分或二次路由。`Selected Model Resolver` 只负责把用户选择解析为可执行的内部配置。
 
-先过滤：
+后端必须依次校验：
 
-- 当前用户已启用的 Provider 和模型。
-- 模式、画幅、清晰度、时长、音频、参考素材等能力兼容性。
-- Provider 健康状态、配额和熔断状态。
-- 数据区域与内容政策是否匹配。
+- Provider 属于当前用户、未删除且 `enabled=true`。
+- 模型属于该 Provider、`enabled=true`，并与视频/图片模式匹配。
+- 画幅、清晰度、时长、音频、参考素材等参数属于模型能力集合。
+- Provider 健康状态、配额和熔断状态允许创建新任务。
+- 数据区域、内容政策和服务端计价规则满足执行要求。
+- 选定模型存在对应的 Provider Adapter 和供应商模型标识。
 
-再评分：
+解析结果应包含 `provider_id`、`provider_model_id`、`adapter_type`、`provider_model_key` 和创建时能力/价格快照。
 
-```text
-score = quality_weight * quality_score
-      + speed_weight * latency_score
-      + cost_weight * cost_score
-      + reliability_weight * success_rate
-```
-
-建议把近期成功率、P95 生成耗时、错误率、单位点数成本作为实时指标。路由结果必须保存候选列表、过滤原因和最终选择原因。
-
-前端模式：
-
-- `auto`：后端路由器选择模型。
-- `manual`：用户指定 Provider/模型，后端只做能力与安全终审。
+如果选定模型不可用，后端返回明确错误和原因，不得静默切换到其他模型。将来若产品增加“智能匹配”，必须作为独立、显式的用户模式设计，不能改变当前默认语义。
 
 ### 5.4 Quality Evaluator
 
@@ -262,7 +251,7 @@ Quality Evaluator 不得直接扣点或创建新任务，只能输出 `accept`�
 | 参数被供应商拒绝 | 归一化错误；允许 Agent 给出修复建议，不自动付费重提 |
 | 内容安全拒绝 | 不换模型规避；返回统一内容政策错误 |
 | 质量评分较低 | 生成建议；只有符合重试预算时才允许自动重试 |
-| Provider 熔断 | 仅在用户允许自动路由且成本不升高时切换候选模型 |
+| Provider 熔断 | 返回选定模型暂不可用；不得静默切换，用户可重新选择后创建新任务 |
 
 每个任务至少记录：
 
@@ -310,7 +299,7 @@ Quality Evaluator 不得直接扣点或创建新任务，只能输出 `accept`�
 | 字段 | 说明 |
 |---|---|
 | task_id / attempt_no | 唯一组合键 |
-| provider_id / model_id | 实际路由结果 |
+| provider_id / model_id | 用户选定且后端校验通过的模型 |
 | provider_job_id | 供应商任务 ID |
 | request_snapshot | 已脱敏请求快照 |
 | status / error_code | 尝试状态 |
@@ -350,9 +339,8 @@ Async Workers
 
 ```json
 {
-  "routing_mode": "auto",
-  "provider_id": null,
-  "model_id": null,
+  "provider_id": "provider_01H...",
+  "model_id": "seedance-1-0-pro",
   "creative_plan_id": null,
   "agent_options": {
     "optimize_prompt": true,
@@ -373,7 +361,7 @@ Async Workers
 - `POST /creative-plans/{id}/confirm`：可不单独提供，直接由 `POST /tasks` 引用。
 - `GET /tasks/{id}/quality-report`：P2 或运营后台使用。
 
-API 响应不直接返回完整供应商提示词模板、内部路由权重、供应商错误原文和敏感安全标签。
+API 响应不直接返回完整供应商提示词模板、内部适配配置、供应商错误原文和敏感安全标签。
 
 ## 10. 状态、超时与幂等
 
@@ -392,7 +380,7 @@ validating -> planning -> reserving -> submitting
 - `POST /tasks` 的幂等范围必须覆盖 Agent 规划和任务事务。
 - 相同幂等键和相同请求不得重复运行 Agent 或重复扣点。
 - Agent 结果可以按输入哈希短期缓存，但必须包含用户、模板版本和素材版本维度。
-- Agent 规划建议超时 8～15 秒；超时策略按手动/智能路由模式分别处理。
+- Agent 规划建议超时 8～15 秒；根据本次请求将 Agent 标记为“可降级增强”或“必需步骤”执行对应策略。
 - 供应商提交、轮询、回调和质检全部独立幂等。
 - 任一 Worker 崩溃后必须能安全重新领取，不产生重复供应商任务。
 
@@ -417,10 +405,10 @@ validating -> planning -> reserving -> submitting
 - Agent 成功率、超时率、P50/P95 延迟。
 - Agent Token 和单位任务成本。
 - Prompt 优化启用率和用户采用率。
-- 自动路由各模型选择率、成功率、P95 耗时和平台成本。
+- 各用户选定模型的使用率、成功率、P95 耗时和平台成本。
 - 质量检查通过率、重试率和误判申诉率。
 - 每个任务用户点数、供应商成本和 Agent 成本。
-- 降级直通率、路由失败率和人工处理量。
+- Agent 降级直通率、选定模型校验失败率和人工处理量。
 
 必须为 Agent 设置：
 
@@ -438,12 +426,13 @@ validating -> planning -> reserving -> submitting
 - 提示词注入不能改变权限、成本和安全规则。
 - 模板或模型升级使用黄金样本回归。
 
-### 13.2 路由测试
+### 13.2 选定模型解析测试
 
 - 不支持参数的模型必须被过滤。
 - 停用、无权限、失效和熔断 Provider 不可选。
-- 手动模式不得被 Agent 擅自换模型。
-- 自动模式的选择原因和评分可追踪。
+- Agent 不得修改用户提交的 Provider 和模型。
+- Provider 不可用时返回明确错误，不得静默使用其他模型。
+- 解析后的 Adapter、供应商模型标识、能力与价格快照可追踪。
 
 ### 13.3 钱包与重试测试
 
@@ -466,11 +455,11 @@ validating -> planning -> reserving -> submitting
 | 阶段 | 范围 | 增量工期 |
 |---|---|---:|
 | A：结构化创作方案 | GenerationSpec、Prompt Compiler、Schema 校验、版本与日志 | 3～5 人日 |
-| B：素材理解与智能路由 | 视觉分析、能力过滤、路由评分、降级策略 | 4～6 人日 |
+| B：素材理解与模型能力终审 | 视觉分析、选定模型解析、能力校验、降级策略 | 3～5 人日 |
 | C：结果质检与受控重试 | 技术质检、语义评分、质量报告、重试预算 | 5～8 人日 |
 | D：多镜头创作 Agent | 脚本、分镜、角色一致性、拼接、配音字幕 | 10～20 人日 |
 
-推荐当前版本只承诺 A+B：在基础生成后端上额外增加约 **7～11 人日**，两名工程师可并行压缩到约一周半。
+推荐当前版本只承诺 A+B：在基础生成后端上额外增加约 **6～10 人日**，两名工程师可并行压缩到约一周。
 
 ## 15. 推荐实施顺序
 
@@ -478,7 +467,7 @@ validating -> planning -> reserving -> submitting
 2. 定义并冻结 `GenerationSpec 1.0` 与严格 Schema。
 3. 接入 Prompt Compiler，保存原始输入、优化结果和版本信息。
 4. 增加素材理解，但限制为结构化分析，不赋予业务写权限。
-5. 实现能力过滤和可解释 Model Router。
+5. 实现 Selected Model Resolver，对用户选定模型做归属、能力、价格和适配器终审。
 6. 通过灰度开关让部分任务使用 Agent，比较成功率、成本和用户采用率。
 7. 指标稳定后再增加质量评估和受控重试。
 8. 多镜头 Agent 作为独立产品阶段，不纳入当前 P0。
@@ -488,7 +477,8 @@ validating -> planning -> reserving -> submitting
 - [ ] Agent 与钱包、密钥、任务状态的权限边界清晰。
 - [ ] GenerationSpec 有严格 Schema、版本和迁移策略。
 - [ ] 手动模式和智能模式的降级行为已确定。
-- [ ] 路由先做硬约束过滤，再做评分。
+- [ ] 后端尊重用户选定模型，只做归属、能力、状态、价格和适配器终审。
+- [ ] 选定模型不可用时明确失败，不静默切换模型。
 - [ ] 用户确认的最大费用贯穿所有尝试。
 - [ ] 自动重试有次数、费用、错误类型和熔断限制。
 - [ ] Agent 运行、供应商尝试和质量报告可追踪。
@@ -496,4 +486,3 @@ validating -> planning -> reserving -> submitting
 - [ ] Agent 不可绕过内容安全、SSRF、权限和参数校验。
 - [ ] Agent 不可用时，核心生成链路有明确降级策略。
 - [ ] 真实供应商端到端测试覆盖规划、扣点、生成、质检和结果。
-
