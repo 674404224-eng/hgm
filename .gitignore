@@ -1,0 +1,20 @@
+node_modules/
+dist/
+
+.env
+.env.*
+!.env.example
+
+.DS_Store
+*.log
+pnpm-lock.yaml
+AGENTS.md
+
+# Local visual QA exports
+implementation-*.png
+design-qa-*.png
+design-reference-*.png
+design-qa.md
+public/qa/
+public/qa-comparison*.html
+public/mobile-check.html
