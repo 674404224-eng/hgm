@@ -26,6 +26,7 @@ VITE_API_BASE_URL=http://localhost:8080/api/v1
 - `openapi/openapi.json`：OpenAPI 3.1 接口文档
 - `docs/BACKEND_INTEGRATION.md`：联调说明与安全边界
 - `docs/PRD_V2.0_BACKEND_READY.md`：后端可执行版 PRD
+- `docs/AGENT_ORCHESTRATION_BACKEND_DESIGN.md`：视频生成 Agent 编排后端设计
 
 API Key 只会通过写入接口提交，前端不持久化或回显完整密钥；生产环境应由后端密钥库加密托管。
 
@@ -45,4 +46,3 @@ npm run build
 - `docs/`：PRD 与联调说明
 - `worker/`：静态站点运行入口
 - `tests/`：契约和运行时测试
-
