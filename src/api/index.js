@@ -20,13 +20,7 @@ function createHttpApi() {
       get: () => client.request("/wallet"),
       listTransactions: ({ page = 1, pageSize = 20 } = {}) => client.request(`/wallet/transactions${query({ page, page_size: pageSize })}`),
     },
-    providers: {
-      list: () => client.request("/providers"),
-      create: (body) => client.request("/providers", { method: "POST", body }),
-      update: (id, body) => client.request(`/providers/${id}`, { method: "PATCH", body }),
-      remove: (id) => client.request(`/providers/${id}`, { method: "DELETE" }),
-      verify: (id) => client.request(`/providers/${id}/verify`, { method: "POST" }),
-    },
+    models: { list: () => client.request("/models") },
     tasks: {
       list: ({ page = 1, pageSize = 20, status, query: search } = {}) => client.request(`/tasks${query({ page, page_size: pageSize, status, q: search })}`),
       create: (body) => client.request("/tasks", { method: "POST", body, idempotencyKey: crypto.randomUUID() }),

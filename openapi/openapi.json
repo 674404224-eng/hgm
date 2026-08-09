@@ -3,14 +3,14 @@
   "info": {
     "title": "策量智算 Video Studio API",
     "version": "1.0.0",
-    "description": "前后端联调契约。所有时间使用 RFC 3339；金额单位为创作点；完整 API Key 仅允许在创建或更新时提交一次。"
+    "description": "前后端联调契约。所有时间使用 RFC 3339；金额单位为创作点；一期模型凭证仅由平台在服务端托管，用户端不接收或管理第三方 API Key。"
   },
   "servers": [
     { "url": "http://localhost:8080/api/v1", "description": "本地联调" },
     { "url": "https://api.example.com/api/v1", "description": "生产环境占位" }
   ],
   "tags": [
-    { "name": "Auth" }, { "name": "Account" }, { "name": "Wallet" }, { "name": "Providers" }, { "name": "Uploads" }, { "name": "Tasks" }
+    { "name": "Auth" }, { "name": "Account" }, { "name": "Wallet" }, { "name": "Models" }, { "name": "Uploads" }, { "name": "Tasks" }
   ],
   "paths": {
     "/auth/sms-codes": {
@@ -49,26 +49,8 @@
         "responses": { "200": { "description": "交易记录分页", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TransactionPage" } } } }, "default": { "$ref": "#/components/responses/Error" } }
       }
     },
-    "/providers": {
-      "get": { "tags": ["Providers"], "summary": "读取模型连接", "responses": { "200": { "description": "连接列表", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProviderList" } } } }, "default": { "$ref": "#/components/responses/Error" } } },
-      "post": {
-        "tags": ["Providers"], "summary": "新增模型连接", "description": "api_key 必须在服务端加密保存，响应不得返回完整值。",
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProviderWrite" } } } },
-        "responses": { "201": { "description": "创建成功", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Provider" } } } }, "default": { "$ref": "#/components/responses/Error" } }
-      }
-    },
-    "/providers/{provider_id}": {
-      "parameters": [ { "$ref": "#/components/parameters/ProviderId" } ],
-      "patch": {
-        "tags": ["Providers"], "summary": "更新或启停模型连接",
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProviderPatch" } } } },
-        "responses": { "200": { "description": "更新成功", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Provider" } } } }, "default": { "$ref": "#/components/responses/Error" } }
-      },
-      "delete": { "tags": ["Providers"], "summary": "删除模型连接", "responses": { "204": { "description": "已删除" }, "409": { "$ref": "#/components/responses/Conflict" }, "default": { "$ref": "#/components/responses/Error" } } }
-    },
-    "/providers/{provider_id}/verify": {
-      "parameters": [ { "$ref": "#/components/parameters/ProviderId" } ],
-      "post": { "tags": ["Providers"], "summary": "验证模型连接", "responses": { "200": { "description": "验证结果", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProviderVerification" } } } }, "default": { "$ref": "#/components/responses/Error" } } }
+    "/models": {
+      "get": { "tags": ["Models"], "summary": "读取平台开放模型", "description": "仅返回平台已配置且可向当前用户开放的模型目录，不返回供应商凭证或内部连接信息。", "responses": { "200": { "description": "平台模型目录", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ModelList" } } } }, "default": { "$ref": "#/components/responses/Error" } } }
     },
     "/uploads/presign": {
       "post": {
@@ -105,7 +87,6 @@
     "parameters": {
       "Page": { "name": "page", "in": "query", "schema": { "type": "integer", "minimum": 1, "default": 1 } },
       "PageSize": { "name": "page_size", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 } },
-      "ProviderId": { "name": "provider_id", "in": "path", "required": true, "schema": { "type": "string" } },
       "TaskId": { "name": "task_id", "in": "path", "required": true, "schema": { "type": "string" } }
     },
     "responses": {
@@ -125,17 +106,14 @@
       "Wallet": { "type": "object", "required": ["available", "used_this_month", "usage_percent"], "properties": { "available": { "type": "integer", "minimum": 0 }, "used_this_month": { "type": "integer", "minimum": 0 }, "usage_percent": { "type": "number", "minimum": 0, "maximum": 100 } } },
       "Transaction": { "type": "object", "required": ["id", "occurred_at", "type", "reference", "amount"], "properties": { "id": { "type": "string" }, "occurred_at": { "type": "string", "format": "date-time" }, "type": { "type": "string", "enum": ["任务消耗", "套餐发放", "活动奖励", "失败退款", "人工调整"] }, "reference": { "type": "string" }, "detail": { "type": "string" }, "amount": { "type": "integer", "description": "正数入账，负数扣减" } } },
       "TransactionPage": { "allOf": [ { "$ref": "#/components/schemas/PageMeta" }, { "type": "object", "properties": { "items": { "type": "array", "items": { "$ref": "#/components/schemas/Transaction" } } } } ] },
-      "Model": { "type": "object", "required": ["name", "mode"], "properties": { "name": { "type": "string" }, "mode": { "type": "string", "enum": ["video", "image"] } } },
-      "Provider": { "type": "object", "required": ["id", "name", "endpoint", "credential", "enabled", "models"], "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "endpoint": { "type": "string" }, "credential": { "type": "string", "readOnly": true, "description": "只返回脱敏标识和末四位" }, "enabled": { "type": "boolean" }, "models": { "type": "array", "items": { "$ref": "#/components/schemas/Model" } } } },
-      "ProviderWrite": { "type": "object", "required": ["name", "endpoint", "api_key", "enabled"], "properties": { "name": { "type": "string", "maxLength": 60 }, "endpoint": { "type": "string", "maxLength": 255 }, "api_key": { "type": "string", "writeOnly": true, "minLength": 4 }, "enabled": { "type": "boolean" }, "models": { "type": "array", "items": { "$ref": "#/components/schemas/Model" } } } },
-      "ProviderPatch": { "type": "object", "minProperties": 1, "properties": { "name": { "type": "string" }, "endpoint": { "type": "string" }, "api_key": { "type": "string", "writeOnly": true, "minLength": 4 }, "enabled": { "type": "boolean" }, "models": { "type": "array", "items": { "$ref": "#/components/schemas/Model" } } } },
-      "ProviderList": { "type": "object", "required": ["items", "total"], "properties": { "items": { "type": "array", "items": { "$ref": "#/components/schemas/Provider" } }, "total": { "type": "integer" } } },
-      "ProviderVerification": { "type": "object", "required": ["valid", "latency_ms"], "properties": { "valid": { "type": "boolean" }, "latency_ms": { "type": "integer" }, "message": { "type": "string" } } },
+      "ModelCapabilities": { "type": "object", "required": ["aspects", "resolutions"], "properties": { "aspects": { "type": "array", "items": { "type": "string", "enum": ["16:9", "9:16", "1:1", "4:3"] } }, "resolutions": { "type": "array", "items": { "type": "string" } }, "durations": { "type": "array", "items": { "type": "integer", "enum": [5, 10, 15, 30] } }, "counts": { "type": "array", "items": { "type": "integer", "enum": [1, 2, 4] } }, "sound": { "type": "boolean" }, "watermark": { "type": "boolean" }, "reference_image": { "type": "boolean" }, "reference_video": { "type": "boolean" } } },
+      "Model": { "type": "object", "required": ["id", "name", "provider_name", "mode", "status", "base_points", "capabilities"], "properties": { "id": { "type": "string", "description": "平台稳定模型标识，创建任务时提交该值" }, "name": { "type": "string" }, "provider_name": { "type": "string" }, "mode": { "type": "string", "enum": ["video", "image"] }, "status": { "type": "string", "enum": ["available", "maintenance", "disabled"] }, "base_points": { "type": "integer", "minimum": 0 }, "capabilities": { "$ref": "#/components/schemas/ModelCapabilities" } } },
+      "ModelList": { "type": "object", "required": ["items", "total"], "properties": { "items": { "type": "array", "items": { "$ref": "#/components/schemas/Model" } }, "total": { "type": "integer" } } },
       "PresignUploadRequest": { "type": "object", "required": ["file_name", "content_type", "size"], "properties": { "file_name": { "type": "string" }, "content_type": { "type": "string", "enum": ["image/png", "image/jpeg", "image/webp", "video/mp4", "video/webm"] }, "size": { "type": "integer", "minimum": 1, "maximum": 524288000 } } },
       "PresignUploadResponse": { "type": "object", "required": ["asset_id", "upload_url", "headers", "expires_in"], "properties": { "asset_id": { "type": "string" }, "upload_url": { "type": "string", "format": "uri" }, "headers": { "type": "object", "additionalProperties": { "type": "string" } }, "expires_in": { "type": "integer" } } },
       "TaskStatus": { "type": "string", "enum": ["queued", "generating", "done", "failed", "cancelled"] },
-      "CreateTaskRequest": { "type": "object", "required": ["prompt", "mode", "model", "aspect", "resolution"], "properties": { "prompt": { "type": "string", "minLength": 1, "maxLength": 1000 }, "mode": { "type": "string", "enum": ["video", "image"] }, "model": { "type": "string" }, "aspect": { "type": "string", "enum": ["16:9", "9:16", "1:1", "4:3"] }, "resolution": { "type": "string" }, "duration": { "type": "string", "enum": ["5s", "10s", "15s", "30s"] }, "sound": { "type": "boolean" }, "watermark": { "type": "string", "maxLength": 20 }, "reference_asset_id": { "type": "string" }, "estimated_cost": { "type": "integer", "minimum": 0 } } },
-      "Task": { "type": "object", "required": ["id", "title", "meta", "cost", "status", "progress", "created"], "properties": { "id": { "type": "string" }, "title": { "type": "string" }, "meta": { "type": "string" }, "cost": { "type": "integer" }, "status": { "$ref": "#/components/schemas/TaskStatus" }, "progress": { "type": "integer", "minimum": 0, "maximum": 100 }, "image": { "type": "string" }, "created": { "type": "string" }, "error": { "type": ["string", "null"] } } },
+      "CreateTaskRequest": { "type": "object", "required": ["prompt", "mode", "model_id", "aspect", "resolution", "max_points"], "properties": { "prompt": { "type": "string", "minLength": 1, "maxLength": 1000 }, "mode": { "type": "string", "enum": ["video", "image"] }, "model_id": { "type": "string", "description": "来自 GET /models 的平台模型标识" }, "aspect": { "type": "string", "enum": ["16:9", "9:16", "1:1", "4:3"] }, "resolution": { "type": "string" }, "duration": { "type": "string", "enum": ["5s", "10s", "15s", "30s"] }, "count": { "type": "integer", "enum": [1, 2, 4] }, "sound": { "type": "boolean" }, "watermark": { "type": "string", "maxLength": 20 }, "reference_asset_id": { "type": "string" }, "max_points": { "type": "integer", "minimum": 0, "description": "用户确认的本次最高创作点；最终价格由服务端计算且不得超过该值" } } },
+      "Task": { "type": "object", "required": ["id", "title", "meta", "cost", "status", "progress", "created"], "properties": { "id": { "type": "string" }, "title": { "type": "string" }, "mode": { "type": "string", "enum": ["video", "image"] }, "model_id": { "type": "string" }, "meta": { "type": "string" }, "cost": { "type": "integer" }, "status": { "$ref": "#/components/schemas/TaskStatus" }, "progress": { "type": "integer", "minimum": 0, "maximum": 100 }, "image": { "type": "string" }, "created": { "type": "string" }, "error": { "type": ["string", "null"] } } },
       "TaskPage": { "allOf": [ { "$ref": "#/components/schemas/PageMeta" }, { "type": "object", "properties": { "items": { "type": "array", "items": { "$ref": "#/components/schemas/Task" } } } } ] },
       "TaskResult": { "type": "object", "required": ["playback_url", "media_type", "expires_at"], "properties": { "playback_url": { "type": "string", "format": "uri" }, "download_url": { "type": "string", "format": "uri" }, "poster_url": { "type": "string", "format": "uri" }, "media_type": { "type": "string", "examples": ["video/mp4"] }, "expires_at": { "type": "string", "format": "date-time" } } },
       "PageMeta": { "type": "object", "required": ["page", "page_size", "total"], "properties": { "page": { "type": "integer" }, "page_size": { "type": "integer" }, "total": { "type": "integer" } } }

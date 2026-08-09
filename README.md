@@ -10,7 +10,7 @@ cp .env.example .env
 npm run dev
 ```
 
-默认使用 Mock API，可独立体验登录、创作、任务中心、账户设置、余额交易和模型 API 配置等流程。
+默认使用 Mock API，可独立体验登录、平台模型创作、任务中心、账户设置和余额交易等流程。
 
 ## 后端联调
 
@@ -27,8 +27,9 @@ VITE_API_BASE_URL=http://localhost:8080/api/v1
 - `docs/BACKEND_INTEGRATION.md`：联调说明与安全边界
 - `docs/PRD_V2.0_BACKEND_READY.md`：后端可执行版 PRD
 - `docs/AGENT_ORCHESTRATION_BACKEND_DESIGN.md`：视频生成 Agent 编排后端设计
+- `docs/PHASE1_PLATFORM_MODEL_POLICY.md`：第一期平台模型与凭证管理决策
 
-API Key 只会通过写入接口提交，前端不持久化或回显完整密钥；生产环境应由后端密钥库加密托管。
+第一期 API Key 仅由平台在服务端密钥库托管，用户端不提供第三方 Key 的新增、管理或回显能力。
 
 ## 质量检查
 

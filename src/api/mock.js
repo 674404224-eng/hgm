@@ -1,10 +1,13 @@
 const wait = (ms = 90) => new Promise((resolve) => window.setTimeout(resolve, ms));
 const clone = (value) => structuredClone(value);
 
-let providers = [
-  { id: "ark-primary", name: "火山方舟", endpoint: "ark.cn-beijing.volces.com", credential: "••••••••9K2M", enabled: true, models: [{ name: "Seedance 1.0 Pro", mode: "video" }, { name: "Seedance 1.0 Lite", mode: "video" }, { name: "Seedream 4.0", mode: "image" }, { name: "Seedream 3.0", mode: "image" }] },
-  { id: "vidu-primary", name: "Vidu", endpoint: "api.vidu.cn", credential: "••••••••4D7Q", enabled: true, models: [{ name: "Vidu Q2 Pro", mode: "video" }] },
-  { id: "flux-backup", name: "Flux API", endpoint: "api.bfl.ai", credential: "••••••••7A1F", enabled: false, models: [{ name: "Flux 1.1 Pro", mode: "image" }] },
+const models = [
+  { id: "seedance-1-0-pro", name: "Seedance 1.0 Pro", provider_name: "火山方舟", mode: "video", status: "available", base_points: 28, capabilities: { aspects: ["16:9", "9:16", "1:1"], resolutions: ["1080P", "720P"], durations: [5, 10, 15, 30], sound: true, watermark: true } },
+  { id: "seedance-1-0-lite", name: "Seedance 1.0 Lite", provider_name: "火山方舟", mode: "video", status: "available", base_points: 18, capabilities: { aspects: ["16:9", "9:16", "1:1"], resolutions: ["720P"], durations: [5, 10], sound: false, watermark: true } },
+  { id: "vidu-q2-pro", name: "Vidu Q2 Pro", provider_name: "Vidu", mode: "video", status: "available", base_points: 24, capabilities: { aspects: ["16:9", "9:16"], resolutions: ["1080P", "720P"], durations: [5, 10, 15], sound: true, watermark: false } },
+  { id: "seedream-4-0", name: "Seedream 4.0", provider_name: "火山方舟", mode: "image", status: "available", base_points: 12, capabilities: { aspects: ["1:1", "16:9", "9:16", "4:3"], resolutions: ["2K", "1K"], counts: [1, 2, 4] } },
+  { id: "seedream-3-0", name: "Seedream 3.0", provider_name: "火山方舟", mode: "image", status: "available", base_points: 8, capabilities: { aspects: ["1:1", "16:9", "4:3"], resolutions: ["1K"], counts: [1, 2] } },
+  { id: "flux-1-1-pro", name: "Flux 1.1 Pro", provider_name: "Flux", mode: "image", status: "maintenance", base_points: 14, capabilities: { aspects: ["1:1", "16:9", "9:16"], resolutions: ["2K", "1K"], counts: [1] } },
 ];
 
 let tasks = [
@@ -41,20 +44,14 @@ export function createMockApi() {
       async get() { await wait(); return { available: 12560, used_this_month: 3440, usage_percent: 28 }; },
       async listTransactions({ page = 1, pageSize = 20 } = {}) { await wait(); return paginate(transactions, page, pageSize); },
     },
-    providers: {
-      async list() { await wait(); return { items: clone(providers), total: providers.length }; },
-      async create(payload) { await wait(); const { api_key: apiKey, ...safePayload } = payload; const item = { ...safePayload, id: `provider-${Date.now()}`, credential: apiKey ? `••••••••${apiKey.slice(-4).toUpperCase()}` : safePayload.credential }; providers = [...providers, item]; return clone(item); },
-      async update(id, payload) { await wait(); const { api_key: apiKey, ...safePayload } = payload; providers = providers.map((item) => item.id === id ? { ...item, ...safePayload, credential: apiKey ? `••••••••${apiKey.slice(-4).toUpperCase()}` : item.credential } : item); return clone(providers.find((item) => item.id === id)); },
-      async remove(id) { await wait(); providers = providers.filter((item) => item.id !== id); return null; },
-      async verify() { await wait(180); return { valid: true, latency_ms: 168 }; },
-    },
+    models: { async list() { await wait(); return { items: clone(models), total: models.length }; } },
     tasks: {
       async list({ page = 1, pageSize = 100 } = {}) {
         await wait();
         tasks = tasks.map((task) => task.status === "generating" ? { ...task, progress: Math.min(100, task.progress + 2), status: task.progress >= 98 ? "done" : "generating" } : task);
         return paginate(tasks, page, pageSize);
       },
-      async create(payload) { await wait(160); const item = { id: `task-${Date.now()}`, title: payload.prompt.slice(0, 14), meta: `${payload.aspect} · ${payload.resolution}${payload.duration ? ` · ${payload.duration}` : ""}`, cost: payload.estimated_cost || 28, status: "queued", progress: 0, image: "/assets/neon-city.png", created: "刚刚" }; tasks = [item, ...tasks]; return clone(item); },
+      async create(payload) { await wait(160); const item = { id: `task-${Date.now()}`, title: payload.prompt.slice(0, 14), meta: `${payload.aspect} · ${payload.resolution}${payload.duration ? ` · ${payload.duration}` : payload.count ? ` · ${payload.count} 张` : ""}`, cost: payload.max_points || 28, status: "queued", progress: 0, image: "/assets/neon-city.png", created: "刚刚" }; tasks = [item, ...tasks]; return clone(item); },
       async remove(id) { await wait(); tasks = tasks.filter((item) => item.id !== id); return null; },
       async getResult(id) { await wait(); const task = tasks.find((item) => item.id === id); return task?.result || { playback_url: task?.image, expires_at: "2026-08-09T00:00:00+08:00" }; },
     },

@@ -18,7 +18,6 @@ import {
   IconLock,
   IconLogout,
   IconPhoto,
-  IconPencil,
   IconPlayerPauseFilled,
   IconPlayerPlayFilled,
   IconPhone,
@@ -66,10 +65,13 @@ const initialTasks = [
   { id: 5, title: "节日促销海报视频", meta: "1:1 · 1080P · 10s", cost: 14, status: "queued", progress: 0, image: assets.interior, created: "12 分钟前" },
 ];
 
-const initialProviders = [
-  { id: "ark-primary", name: "火山方舟", endpoint: "ark.cn-beijing.volces.com", credential: "••••••••9K2M", enabled: true, models: [{ name: "Seedance 1.0 Pro", mode: "video" }, { name: "Seedance 1.0 Lite", mode: "video" }, { name: "Seedream 4.0", mode: "image" }, { name: "Seedream 3.0", mode: "image" }] },
-  { id: "vidu-primary", name: "Vidu", endpoint: "api.vidu.cn", credential: "••••••••4D7Q", enabled: true, models: [{ name: "Vidu Q2 Pro", mode: "video" }] },
-  { id: "flux-backup", name: "Flux API", endpoint: "api.bfl.ai", credential: "••••••••7A1F", enabled: false, models: [{ name: "Flux 1.1 Pro", mode: "image" }] },
+const initialModels = [
+  { id: "seedance-1-0-pro", name: "Seedance 1.0 Pro", provider_name: "火山方舟", mode: "video", status: "available", base_points: 28, capabilities: { aspects: ["16:9", "9:16", "1:1"], resolutions: ["1080P", "720P"], durations: [5, 10, 15, 30], sound: true, watermark: true } },
+  { id: "seedance-1-0-lite", name: "Seedance 1.0 Lite", provider_name: "火山方舟", mode: "video", status: "available", base_points: 18, capabilities: { aspects: ["16:9", "9:16", "1:1"], resolutions: ["720P"], durations: [5, 10], sound: false, watermark: true } },
+  { id: "vidu-q2-pro", name: "Vidu Q2 Pro", provider_name: "Vidu", mode: "video", status: "available", base_points: 24, capabilities: { aspects: ["16:9", "9:16"], resolutions: ["1080P", "720P"], durations: [5, 10, 15], sound: true, watermark: false } },
+  { id: "seedream-4-0", name: "Seedream 4.0", provider_name: "火山方舟", mode: "image", status: "available", base_points: 12, capabilities: { aspects: ["1:1", "16:9", "9:16", "4:3"], resolutions: ["2K", "1K"], counts: [1, 2, 4] } },
+  { id: "seedream-3-0", name: "Seedream 3.0", provider_name: "火山方舟", mode: "image", status: "available", base_points: 8, capabilities: { aspects: ["1:1", "16:9", "4:3"], resolutions: ["1K"], counts: [1, 2] } },
+  { id: "flux-1-1-pro", name: "Flux 1.1 Pro", provider_name: "Flux", mode: "image", status: "maintenance", base_points: 14, capabilities: { aspects: ["1:1", "16:9", "9:16"], resolutions: ["2K", "1K"], counts: [1] } },
 ];
 
 const transactionRecords = [
@@ -121,12 +123,13 @@ function ParameterSelect({ label, value, onChange, options, ariaLabel, className
   return <label className={`parameter-field ${className}`}><span>{label}</span><span className="select-control"><select value={value} onChange={(event) => onChange?.(event.target.value)} aria-label={ariaLabel}>{options.map((option) => { const item = typeof option === "string" ? { value: option, label: option } : option; return <option key={item.value} value={item.value}>{item.label}</option>; })}</select><IconChevronDown size={16} aria-hidden="true" /></span></label>;
 }
 
-function ComposerWithInitial({ initialPrompt, onGenerate, onToast, providers }) {
+function ComposerWithInitial({ initialPrompt, onGenerate, onToast, models }) {
   const [mode, setMode] = useState("video");
-  const [model, setModel] = useState("Seedance 1.0 Pro");
+  const [modelId, setModelId] = useState("seedance-1-0-pro");
   const [aspect, setAspect] = useState("16:9");
   const [resolution, setResolution] = useState("1080P");
   const [duration, setDuration] = useState("10s");
+  const [count, setCount] = useState(1);
   const [sound, setSound] = useState(true);
   const [watermark, setWatermark] = useState(false);
   const [watermarkText, setWatermarkText] = useState("");
@@ -134,13 +137,30 @@ function ComposerWithInitial({ initialPrompt, onGenerate, onToast, providers }) 
   const [reference, setReference] = useState(null);
   const fileRef = useRef(null);
 
-  const availableModels = useMemo(() => providers.filter((provider) => provider.enabled).flatMap((provider) => provider.models.filter((item) => item.mode === mode).map((item) => ({ value: item.name, label: `${item.name} · ${provider.name}` }))), [mode, providers]);
+  const availableModels = useMemo(() => models.filter((item) => item.status === "available" && item.mode === mode).map((item) => ({ value: item.id, label: `${item.name} · ${item.provider_name}` })), [mode, models]);
+  const selectedModel = models.find((item) => item.id === modelId);
+  const capabilities = selectedModel?.capabilities || {};
+  const aspectOptions = capabilities.aspects?.length ? capabilities.aspects : ["16:9", "9:16", "1:1", "4:3"];
+  const resolutionOptions = capabilities.resolutions?.length ? capabilities.resolutions : mode === "video" ? ["1080P", "720P"] : ["2K", "1K"];
+  const durationOptions = capabilities.durations?.length ? capabilities.durations.map((item) => `${item}s`) : ["5s", "10s", "15s", "30s"];
+  const countOptions = capabilities.counts?.length ? capabilities.counts : [1, 2, 4];
+  const estimatedPoints = (selectedModel?.base_points ?? 28) * (mode === "image" ? count : 1);
 
   useEffect(() => {
-    setModel(availableModels[0]?.value || "");
+    setModelId(availableModels[0]?.value || "");
     if (mode === "video") { setAspect("16:9"); setResolution("1080P"); }
     else { setAspect("1:1"); setResolution("2K"); }
   }, [mode, availableModels]);
+
+  useEffect(() => {
+    if (!selectedModel) return;
+    if (!aspectOptions.includes(aspect)) setAspect(aspectOptions[0]);
+    if (!resolutionOptions.includes(resolution)) setResolution(resolutionOptions[0]);
+    if (mode === "video" && !durationOptions.includes(duration)) setDuration(durationOptions[0]);
+    if (mode === "image" && !countOptions.includes(count)) setCount(countOptions[0]);
+    if (!capabilities.sound) setSound(false);
+    if (!capabilities.watermark) { setWatermark(false); setWatermarkText(""); }
+  }, [selectedModel, mode]);
 
   const chooseFile = (file) => {
     if (!file) return;
@@ -150,10 +170,10 @@ function ComposerWithInitial({ initialPrompt, onGenerate, onToast, providers }) 
 
   const submit = async () => {
     if (!prompt.trim()) return onToast("先写下你的创意，再开始生成");
-    if (!model) return onToast("请先在用户中心启用一个可用的模型 API");
+    if (!modelId) return onToast("当前暂无可用模型，请稍后再试");
     if (watermark && !watermarkText.trim()) return onToast("请输入水印文字，或关闭水印");
     try {
-      await onGenerate({ prompt, mode, reference, model, aspect, resolution, duration, sound, watermark: watermark ? watermarkText.trim() : "" });
+      await onGenerate({ prompt, mode, reference, modelId, aspect, resolution, duration, count, sound, watermark: watermark ? watermarkText.trim() : "", maxPoints: estimatedPoints });
       setPrompt(""); setReference(null);
     } catch (error) { onToast(error.message || "任务提交失败，请稍后重试"); }
   };
@@ -170,16 +190,16 @@ function ComposerWithInitial({ initialPrompt, onGenerate, onToast, providers }) 
         </div>
       </div>
       <div className="parameter-section">
-        <div className="parameter-title"><IconAdjustmentsHorizontal size={17} /><strong>生成参数</strong><span>已按当前模式匹配可用配置</span></div>
+        <div className="parameter-title"><IconAdjustmentsHorizontal size={17} /><strong>生成参数</strong><span>模型由平台统一提供与维护</span></div>
         <div className="parameter-grid">
-          <ParameterSelect className="model-field" label="模型" value={model} onChange={setModel} ariaLabel="模型选择" options={availableModels.length ? availableModels : [{ value: "", label: "请先配置模型 API" }]} />
-          <ParameterSelect label="画幅" value={aspect} onChange={setAspect} ariaLabel="画幅选择" options={["16:9", "9:16", "1:1", "4:3"]} />
-          <ParameterSelect label="清晰度" value={resolution} onChange={setResolution} ariaLabel="清晰度选择" options={mode === "video" ? ["1080P", "720P"] : ["2K", "1K"]} />
-          {mode === "video" ? <ParameterSelect label="时长" value={duration} onChange={setDuration} ariaLabel="时长选择" options={["5s", "10s", "15s", "30s"]} /> : <ParameterSelect label="数量" value="1 张" ariaLabel="生成数量" options={["1 张", "2 张", "4 张"]} />}
+          <ParameterSelect className="model-field" label="模型" value={modelId} onChange={setModelId} ariaLabel="模型选择" options={availableModels.length ? availableModels : [{ value: "", label: "暂无可用模型" }]} />
+          <ParameterSelect label="画幅" value={aspect} onChange={setAspect} ariaLabel="画幅选择" options={aspectOptions} />
+          <ParameterSelect label="清晰度" value={resolution} onChange={setResolution} ariaLabel="清晰度选择" options={resolutionOptions} />
+          {mode === "video" ? <ParameterSelect label="时长" value={duration} onChange={setDuration} ariaLabel="时长选择" options={durationOptions} /> : <ParameterSelect label="数量" value={String(count)} onChange={(value) => setCount(Number(value))} ariaLabel="生成数量" options={countOptions.map((item) => ({ value: String(item), label: `${item} 张` }))} />}
         </div>
-        {mode === "video" && <div className="parameter-options"><label><input type="checkbox" checked={sound} onChange={(event) => setSound(event.target.checked)} />生成音频</label><label><input type="checkbox" checked={watermark} onChange={(event) => { setWatermark(event.target.checked); if (!event.target.checked) setWatermarkText(""); }} />添加水印</label>{watermark && <div className="watermark-field"><input autoFocus value={watermarkText} maxLength={20} onChange={(event) => setWatermarkText(event.target.value)} placeholder="输入水印文字" aria-label="水印文字" /><span>{watermarkText.length}/20</span></div>}<span className="cost-estimate">预计消耗 28 创作点 · 约 3–5 分钟</span></div>}
+        <div className="parameter-options">{mode === "video" && <><label className={!capabilities.sound ? "option-disabled" : ""}><input type="checkbox" checked={sound} disabled={!capabilities.sound} onChange={(event) => setSound(event.target.checked)} />生成音频</label><label className={!capabilities.watermark ? "option-disabled" : ""}><input type="checkbox" checked={watermark} disabled={!capabilities.watermark} onChange={(event) => { setWatermark(event.target.checked); if (!event.target.checked) setWatermarkText(""); }} />添加水印</label>{watermark && <div className="watermark-field"><input autoFocus value={watermarkText} maxLength={20} onChange={(event) => setWatermarkText(event.target.value)} placeholder="输入水印文字" aria-label="水印文字" /><span>{watermarkText.length}/20</span></div>}</>}<span className="cost-estimate">预计消耗 {estimatedPoints} 创作点 · 约 3–5 分钟</span></div>
       </div>
-      <div className="composer-footer"><div className="trust-row"><span><IconShieldCheck size={15} />模型服务正常</span><span><IconLock size={15} />素材私密处理</span><span><IconEye size={15} />预计消耗实时可见</span></div></div>
+      <div className="composer-footer"><div className="trust-row"><span><IconShieldCheck size={15} />平台模型统一托管</span><span><IconLock size={15} />素材私密处理</span><span><IconEye size={15} />预计消耗实时可见</span></div></div>
     </section>
   );
 }
@@ -196,11 +216,11 @@ function RecommendationCard({ item, onSelect }) {
   return <article className="recommendation" tabIndex="0" onClick={() => onSelect(item.prompt)} onKeyDown={(event) => event.key === "Enter" && onSelect(item.prompt)}><div className="thumb"><img src={item.image} alt={item.title} /><span className="play"><IconPlayerPlayFilled size={19} /></span></div><strong>{item.title}</strong><div className="tags">{item.meta.map((tag) => <span key={tag}>{tag}</span>)}</div></article>;
 }
 
-function HomeView({ tasks, setTasks, setView, onToast, providers }) {
+function HomeView({ tasks, setTasks, setView, onToast, models }) {
   const [injectedPrompt, setInjectedPrompt] = useState("");
   const [composerKey, setComposerKey] = useState(0);
   const fillPrompt = (value) => { setInjectedPrompt(value); setComposerKey((key) => key + 1); onToast("创意描述已带入，请继续完善"); window.setTimeout(() => document.querySelector("textarea")?.focus(), 30); };
-  const createTask = async ({ prompt, mode, reference, model, aspect, resolution, duration, sound, watermark }) => {
+  const createTask = async ({ prompt, mode, reference, modelId, aspect, resolution, duration, count, sound, watermark, maxPoints }) => {
     let referenceAssetId;
     if (reference?.file && !api.isMock) {
       const upload = await api.uploads.createPresignedUpload({ file_name: reference.name, content_type: reference.type, size: reference.file.size });
@@ -208,36 +228,10 @@ function HomeView({ tasks, setTasks, setView, onToast, providers }) {
       if (!response.ok) throw new Error("参考素材上传失败，请重试");
       referenceAssetId = upload.asset_id;
     }
-    const task = await api.tasks.create({ prompt, mode, model, aspect, resolution, duration: mode === "video" ? duration : undefined, sound, watermark: watermark || undefined, reference_asset_id: referenceAssetId, estimated_cost: 28 });
+    const task = await api.tasks.create({ prompt, mode, model_id: modelId, aspect, resolution, duration: mode === "video" ? duration : undefined, count: mode === "image" ? count : undefined, sound: mode === "video" ? sound : undefined, watermark: watermark || undefined, reference_asset_id: referenceAssetId, max_points: maxPoints });
     setTasks((current) => [task, ...current.filter((item) => item.id !== task.id)]); onToast("任务已提交，可在右侧或任务中心查看进度");
   };
-  return <div className="home-view"><section className="hero-copy"><h1>把灵感，变成下一帧。</h1><p>组合文案、图片、音频和参考视频，提交后自动追踪任务进度。</p></section><div className="composer-proxy" data-prefill={injectedPrompt}><ComposerWithInitial key={`${composerKey}-${injectedPrompt}`} initialPrompt={injectedPrompt} onGenerate={createTask} onToast={onToast} providers={providers} /></div><ActiveTasks tasks={tasks} setView={setView} /><section className="recommendations-section"><h2>为你推荐</h2><div className="recommendations-grid">{recommendations.map((item) => <RecommendationCard key={item.title} item={item} onSelect={fillPrompt} />)}</div></section></div>;
-}
-
-function ApiConfigDialog({ editingProvider, onClose, onSave, onToast }) {
-  const editingVendor = ["火山方舟", "Vidu", "Flux API"].find((item) => editingProvider?.name.startsWith(item)) || "火山方舟";
-  const [vendor, setVendor] = useState(editingVendor);
-  const [name, setName] = useState(editingProvider ? (editingProvider.name.split(" · ").slice(1).join(" · ") || "默认连接") : "生产环境");
-  const [endpoint, setEndpoint] = useState(editingProvider?.endpoint || "ark.cn-beijing.volces.com");
-  const [secret, setSecret] = useState("");
-  const vendorModels = {
-    "火山方舟": [{ name: "Seedance 1.0 Pro", mode: "video" }, { name: "Seedance 1.0 Lite", mode: "video" }, { name: "Seedream 4.0", mode: "image" }],
-    Vidu: [{ name: "Vidu Q2 Pro", mode: "video" }],
-    "Flux API": [{ name: "Flux 1.1 Pro", mode: "image" }],
-  };
-  const save = async () => {
-    if (!name.trim() || !endpoint.trim() || (!editingProvider && secret.length < 4) || (secret && secret.length < 4)) return onToast(editingProvider ? "请完整填写连接信息，新密钥至少 4 位" : "请完整填写连接名称、地址和密钥");
-    try {
-      await onSave({ id: editingProvider?.id, name: `${vendor} · ${name.trim()}`, endpoint: endpoint.trim(), api_key: secret || undefined, credential: secret ? `••••••••${secret.slice(-4).toUpperCase()}` : editingProvider?.credential, enabled: editingProvider?.enabled ?? true, models: editingProvider && vendor === editingVendor ? editingProvider.models : vendorModels[vendor] });
-      setSecret("");
-      onClose();
-    } catch (error) { onToast(error.message || "模型 API 保存失败"); }
-  };
-  return <div className="modal-backdrop"><section className="api-dialog" role="dialog" aria-modal="true" aria-labelledby="api-dialog-title"><div className="api-dialog-head"><div><h2 id="api-dialog-title">{editingProvider ? "编辑模型 API" : "新增模型 API"}</h2><p>{editingProvider ? "可更新连接信息；密钥留空将继续使用服务端已有凭证。" : "凭证一次性提交到服务端密钥库，保存后仅显示末 4 位。"}</p></div><button aria-label="关闭" onClick={onClose}><IconX size={18} /></button></div><div className="api-form"><label><span>服务商</span><span className="select-control"><select value={vendor} onChange={(event) => { const next = event.target.value; setVendor(next); setEndpoint(next === "火山方舟" ? "ark.cn-beijing.volces.com" : next === "Vidu" ? "api.vidu.cn" : "api.bfl.ai"); }}><option>火山方舟</option><option>Vidu</option><option>Flux API</option></select><IconChevronDown size={16} /></span></label><label><span>连接名称</span><input value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：生产环境" /></label><label><span>API 地址</span><input value={endpoint} onChange={(event) => setEndpoint(event.target.value)} /></label><label><span>API 密钥</span><input type="password" value={secret} onChange={(event) => setSecret(event.target.value)} placeholder={editingProvider ? "留空则保留现有凭证" : "仅用于演示，请勿输入真实密钥"} autoComplete="off" /></label></div><div className="api-security-note"><IconShieldCheck size={17} /><span>前端不会保存或回显完整密钥；生产环境由服务端加密托管。</span></div><div className="api-dialog-actions"><button onClick={onClose}>取消</button><button className="primary" onClick={save}>{editingProvider ? "保存修改" : "保存并验证"}</button></div></section></div>;
-}
-
-function DeleteProviderDialog({ provider, onClose, onConfirm }) {
-  return <div className="modal-backdrop"><section className="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-provider-title"><span className="dialog-icon"><IconTrash size={24} /></span><h2 id="delete-provider-title">删除模型连接？</h2><p>将删除“{provider.name}”的连接记录，首页也会同步移除它提供的模型。此操作不可撤销。</p><div><button onClick={onClose}>取消</button><button className="danger" onClick={onConfirm}>确认删除</button></div></section></div>;
+  return <div className="home-view"><section className="hero-copy"><h1>把灵感，变成下一帧。</h1><p>组合文案、图片、音频和参考视频，提交后自动追踪任务进度。</p></section><div className="composer-proxy" data-prefill={injectedPrompt}><ComposerWithInitial key={`${composerKey}-${injectedPrompt}`} initialPrompt={injectedPrompt} onGenerate={createTask} onToast={onToast} models={models} /></div><ActiveTasks tasks={tasks} setView={setView} /><section className="recommendations-section"><h2>为你推荐</h2><div className="recommendations-grid">{recommendations.map((item) => <RecommendationCard key={item.title} item={item} onSelect={fillPrompt} />)}</div></section></div>;
 }
 
 function VideoPreviewDialog({ task, onClose }) {
@@ -290,65 +284,16 @@ function TransactionRecords({ records = transactionRecords }) {
   );
 }
 
-function AccountSettings({ setView, onToast, avatarSeed }) {
-  const aid = "clzs-7F3A9C2E-20260808";
-  const copyValue = async (value, label) => {
-    try { await navigator.clipboard.writeText(value); onToast(`${label}已复制`); }
-    catch { onToast("浏览器未授权复制，请手动记录"); }
-  };
-  return (
-    <section className="account-settings-view">
-      <button className="back-home" onClick={() => setView("account")}><IconChevronRight size={17} />返回用户中心</button>
-      <div className="settings-heading"><div><h1>账户设置</h1><p>查看账户基本信息与系统唯一身份标识。</p></div><GeneratedAvatar seed={avatarSeed} className="settings-avatar" /></div>
-      <article className="identity-card">
-        <div className="identity-card-head"><div><h2>基本信息</h2><p>AID 由系统创建且不可修改，可用于客服核验和数据归属识别。</p></div><span className="identity-status"><IconShieldCheck size={16} />身份已验证</span></div>
-        <div className="identity-fields">
-          <label><span>姓名</span><div className="identity-value"><strong>林溪</strong></div></label>
-          <label className="aid-field"><span>AID · 唯一用户标识</span><div className="identity-value emphasized"><code>{aid}</code><button aria-label="复制 AID" onClick={() => copyValue(aid, "AID")}><IconCopy size={18} />复制</button></div><small>系统唯一生成，不随手机号或昵称变更。</small></label>
-          <label><span>手机号码</span><div className="identity-value"><strong>159 0581 8327</strong><button aria-label="复制手机号码" onClick={() => copyValue("15905818327", "手机号")}><IconCopy size={18} /></button></div></label>
-        </div>
-      </article>
-    </section>
-  );
-}
-
-function AccountCenter({ setView, providers, setProviders, onToast, avatarSeed }) {
-  const [apiDialogOpen, setApiDialogOpen] = useState(false);
-  const [editingProvider, setEditingProvider] = useState(null);
-  const [deletingProvider, setDeletingProvider] = useState(null);
-  const toggleProvider = (id) => setProviders((current) => current.map((provider) => provider.id === id ? { ...provider, enabled: !provider.enabled } : provider));
-  const openAdd = () => { setEditingProvider(null); setApiDialogOpen(true); };
-  const closeApiDialog = () => { setApiDialogOpen(false); setEditingProvider(null); };
-  const copyCredential = async (provider) => {
-    try { await navigator.clipboard.writeText(provider.credential); onToast("已复制脱敏 Key 标识；完整密钥不会在前端回显"); }
-    catch { onToast("浏览器未授权复制，请手动记录脱敏标识"); }
-  };
-  return <section className="account-view"><div className="account-header"><div><button className="back-home" onClick={() => setView("home")}><IconChevronRight size={17} />返回首页</button><h1>用户中心</h1><p>查看账户信息、套餐用量、交易记录与模型连接。</p></div></div><div className="account-grid"><article className="account-profile-card"><GeneratedAvatar seed={avatarSeed} className="account-avatar" /><div><h2>林溪</h2><p>linxi@example.com</p><span>企业专业版</span></div><button onClick={() => setView("account-settings")}>查看账户</button></article><article className="account-stat"><span>可用创作点</span><strong>12,560</strong><small>本月已使用 3,440</small></article><article className="account-stat"><span>已连接 API</span><strong>{providers.length}</strong><small>{providers.filter((provider) => provider.enabled).length} 个已启用</small></article><article className="account-panel usage-panel"><h2>套餐与用量</h2><div className="usage-row"><span>企业专业版</span><strong>有效期至 2027-08-08</strong></div><div className="usage-track"><i style={{ width: "28%" }} /></div><p>本周期已使用 28% 创作点</p></article><article className="account-panel model-config-panel"><div className="model-config-head"><div><h2>模型 API 配置</h2><p>首页“生成参数”只显示这里已启用连接提供的模型。</p></div><button className="primary-action" onClick={openAdd}><IconPlus size={17} />新增 API</button></div><div className="provider-list">{providers.length ? providers.map((provider) => <div className="provider-row" key={provider.id}><span className={`provider-logo ${provider.enabled ? "enabled" : ""}`}><IconSettings size={20} /></span><div className="provider-main"><strong>{provider.name}</strong><small>{provider.endpoint}</small><div>{provider.models.map((model) => <span key={`${model.mode}-${model.name}`}>{model.name}</span>)}</div></div><div className="provider-secret"><span>凭证</span><strong>{provider.credential}</strong></div><label className="provider-switch"><input type="checkbox" checked={provider.enabled} onChange={() => toggleProvider(provider.id)} /><span>{provider.enabled ? "已启用" : "已停用"}</span></label><div className="provider-actions"><button title="复制脱敏 Key 标识" aria-label={`复制 ${provider.name} Key`} onClick={() => copyCredential(provider)}><IconCopy size={16} /></button><button title="编辑连接" aria-label={`编辑 ${provider.name}`} onClick={() => { setEditingProvider(provider); setApiDialogOpen(true); }}><IconPencil size={16} /></button><button className="delete" title="删除连接" aria-label={`删除 ${provider.name}`} onClick={() => setDeletingProvider(provider)}><IconTrash size={16} /></button></div></div>) : <div className="provider-empty"><span><IconSettings size={28} /></span><strong>尚未连接模型 API</strong><p>连接后，已启用模型会自动出现在首页的生成参数中。</p><button className="primary-action" onClick={openAdd}><IconPlus size={17} />连接第一个 API</button></div>}</div></article><TransactionRecords /></div>{apiDialogOpen && <ApiConfigDialog editingProvider={editingProvider} onClose={closeApiDialog} onToast={onToast} onSave={(provider) => { setProviders((current) => editingProvider ? current.map((item) => item.id === provider.id ? provider : item) : [...current, provider]); onToast(editingProvider ? "模型 API 配置已更新" : "模型 API 已连接，首页模型列表已更新"); }} />}{deletingProvider && <DeleteProviderDialog provider={deletingProvider} onClose={() => setDeletingProvider(null)} onConfirm={() => { setProviders((current) => current.filter((provider) => provider.id !== deletingProvider.id)); setDeletingProvider(null); onToast("模型连接已删除，首页模型列表已同步更新"); }} />}</section>;
-}
-
-function SettingsHub({ setView, providers, setProviders, onToast, avatarSeed, account, wallet, transactions }) {
+function SettingsHub({ setView, onToast, avatarSeed, account, wallet, transactions }) {
   const [section, setSection] = useState("account");
-  const [apiDialogOpen, setApiDialogOpen] = useState(false);
-  const [editingProvider, setEditingProvider] = useState(null);
-  const [deletingProvider, setDeletingProvider] = useState(null);
   const aid = account.aid;
-  const openAdd = () => { setEditingProvider(null); setApiDialogOpen(true); };
-  const closeApiDialog = () => { setApiDialogOpen(false); setEditingProvider(null); };
   const copyValue = async (value, label) => {
     try { await navigator.clipboard.writeText(value); onToast(`${label}已复制`); }
     catch { onToast("浏览器未授权复制，请手动记录"); }
-  };
-  const toggleProvider = async (id) => {
-    const currentProvider = providers.find((provider) => provider.id === id);
-    const enabled = !currentProvider.enabled;
-    setProviders((current) => current.map((provider) => provider.id === id ? { ...provider, enabled } : provider));
-    try { await api.providers.update(id, { enabled }); }
-    catch (error) { setProviders((current) => current.map((provider) => provider.id === id ? currentProvider : provider)); onToast(error.message); }
   };
   const navigation = [
     { id: "account", label: "账户", icon: IconUserCircle },
     { id: "balance", label: "余额", icon: IconCoin },
-    { id: "api", label: "API Keys", icon: IconSettings },
   ];
   return (
     <section className="settings-hub-view">
@@ -357,12 +302,9 @@ function SettingsHub({ setView, providers, setProviders, onToast, avatarSeed, ac
         <aside className="settings-sidebar" aria-label="用户中心导航"><h1>设置</h1><nav>{navigation.map((item) => { const NavIcon = item.icon; return <button key={item.id} className={section === item.id ? "active" : ""} onClick={() => setSection(item.id)}><NavIcon size={20} />{item.label}</button>; })}</nav></aside>
         <main className="settings-main">
           {section === "account" && <><div className="settings-page-title"><div><h2>账户设置</h2><p>查看账户基本信息与系统唯一身份标识。</p></div><GeneratedAvatar seed={avatarSeed} className="settings-avatar" /></div><article className="identity-card"><div className="identity-card-head"><div><h2>基本信息</h2><p>AID 由系统创建且不可修改，可用于客服核验和数据归属识别。</p></div><span className="identity-status"><IconShieldCheck size={16} />身份已验证</span></div><div className="identity-fields"><label><span>姓名</span><div className="identity-value"><strong>{account.name}</strong></div></label><label><span>手机号码</span><div className="identity-value"><strong>{account.phone.replace(/(\d{3})(\d{4})(\d{4})/, "$1 $2 $3")}</strong><button aria-label="复制手机号码" onClick={() => copyValue(account.phone, "手机号")}><IconCopy size={18} /></button></div></label><label className="aid-field"><span>AID · 唯一用户标识</span><div className="identity-value emphasized"><code>{aid}</code><button aria-label="复制 AID" onClick={() => copyValue(aid, "AID")}><IconCopy size={18} />复制</button></div><small>系统唯一生成，不随手机号或昵称变更。</small></label></div></article></>}
-          {section === "balance" && <><div className="settings-page-title"><div><h2>余额</h2><p>查看创作点余额、套餐用量与交易明细。</p></div></div><div className="balance-grid"><article className="account-stat"><span>可用创作点</span><strong>{wallet.available.toLocaleString()}</strong><small>本月已使用 {wallet.used_this_month.toLocaleString()}</small></article><article className="account-panel usage-panel"><h2>套餐与用量</h2><div className="usage-track"><i style={{ width: `${wallet.usage_percent}%` }} /></div><p>本周期已使用 {wallet.usage_percent}% 创作点</p></article></div><TransactionRecords records={transactions} /></>}
-          {section === "api" && <><div className="settings-page-title"><div><h2>API Keys</h2><p>连接并管理生成模型服务，完整密钥不会在前端回显。</p></div><button className="primary-action settings-add-api" onClick={openAdd}><IconPlus size={17} />新增 API</button></div><article className="account-panel model-config-panel settings-api-panel"><div className="model-config-head"><div><h2>模型 API 配置</h2><p>首页“生成参数”只显示已启用连接提供的模型。</p></div></div><div className="provider-list">{providers.length ? providers.map((provider) => <div className="provider-row" key={provider.id}><span className={`provider-logo ${provider.enabled ? "enabled" : ""}`}><IconSettings size={20} /></span><div className="provider-main"><strong>{provider.name}</strong><small>{provider.endpoint}</small><div>{provider.models.map((model) => <span key={`${model.mode}-${model.name}`}>{model.name}</span>)}</div></div><div className="provider-secret"><span>凭证</span><strong>{provider.credential}</strong></div><label className="provider-switch"><input type="checkbox" checked={provider.enabled} onChange={() => toggleProvider(provider.id)} /><span>{provider.enabled ? "已启用" : "已停用"}</span></label><div className="provider-actions"><button title="复制脱敏 Key 标识" aria-label={`复制 ${provider.name} Key`} onClick={() => copyValue(provider.credential, "脱敏 Key 标识")}><IconCopy size={16} /></button><button title="编辑连接" aria-label={`编辑 ${provider.name}`} onClick={() => { setEditingProvider(provider); setApiDialogOpen(true); }}><IconPencil size={16} /></button><button className="delete" title="删除连接" aria-label={`删除 ${provider.name}`} onClick={() => setDeletingProvider(provider)}><IconTrash size={16} /></button></div></div>) : <div className="provider-empty"><span><IconSettings size={28} /></span><strong>尚未连接模型 API</strong><p>连接后，已启用模型会自动出现在首页的生成参数中。</p><button className="primary-action" onClick={openAdd}><IconPlus size={17} />连接第一个 API</button></div>}</div></article></>}
+          {section === "balance" && <><div className="settings-page-title"><div><h2>余额</h2><p>查看创作点余额、用量与交易明细。</p></div></div><div className="balance-grid"><article className="account-stat"><span>可用创作点</span><strong>{wallet.available.toLocaleString()}</strong><small>本月已使用 {wallet.used_this_month.toLocaleString()}</small></article><article className="account-panel usage-panel"><h2>本期用量</h2><div className="usage-track"><i style={{ width: `${wallet.usage_percent}%` }} /></div><p>本周期已使用 {wallet.usage_percent}% 创作点</p></article></div><article className="platform-billing-note"><span><IconShieldCheck size={22} /></span><div><strong>平台统一提供模型服务</strong><p>无需配置外部 API Key；创作点包含模型调用、智能处理与结果存储服务。</p></div></article><TransactionRecords records={transactions} /></>}
         </main>
       </div>
-      {apiDialogOpen && <ApiConfigDialog editingProvider={editingProvider} onClose={closeApiDialog} onToast={onToast} onSave={async (provider) => { const saved = editingProvider ? await api.providers.update(editingProvider.id, provider) : await api.providers.create(provider); setProviders((current) => editingProvider ? current.map((item) => item.id === saved.id ? saved : item) : [...current, saved]); onToast(editingProvider ? "模型 API 配置已更新" : "模型 API 已连接，首页模型列表已更新"); }} />}
-      {deletingProvider && <DeleteProviderDialog provider={deletingProvider} onClose={() => setDeletingProvider(null)} onConfirm={async () => { try { await api.providers.remove(deletingProvider.id); setProviders((current) => current.filter((provider) => provider.id !== deletingProvider.id)); setDeletingProvider(null); onToast("模型连接已删除，首页模型列表已同步更新"); } catch (error) { onToast(error.message); } }} />}
     </section>
   );
 }
@@ -446,7 +388,7 @@ export function App() {
   const emptyPreview = previewParams.get("state") === "empty";
   const [view, setView] = useState("home");
   const [tasks, setTasks] = useState(emptyPreview ? [] : api.isMock ? initialTasks : []);
-  const [providers, setProviders] = useState(emptyPreview ? [] : api.isMock ? initialProviders : []);
+  const [models, setModels] = useState(api.isMock ? initialModels : []);
   const [account, setAccount] = useState({ aid: "—", name: "", phone: "", email: "", avatar_seed: 0 });
   const [wallet, setWallet] = useState({ available: 0, used_this_month: 0, usage_percent: 0 });
   const [transactions, setTransactions] = useState(emptyPreview ? [] : transactionRecords);
@@ -465,9 +407,9 @@ export function App() {
     let cancelled = false;
     const sync = async () => {
       try {
-        const [taskPage, providerPage, accountData, walletData, transactionPage] = await Promise.all([api.tasks.list({ pageSize: 100 }), api.providers.list(), api.account.get(), api.wallet.get(), api.wallet.listTransactions({ pageSize: 100 })]);
+        const [taskPage, modelPage, accountData, walletData, transactionPage] = await Promise.all([api.tasks.list({ pageSize: 100 }), api.models.list(), api.account.get(), api.wallet.get(), api.wallet.listTransactions({ pageSize: 100 })]);
         if (cancelled) return;
-        setTasks(taskPage.items); setProviders(providerPage.items); setAccount(accountData); setWallet(walletData); setTransactions(transactionPage.items); setAvatarSeed(accountData.avatar_seed ?? 0);
+        setTasks(taskPage.items); setModels(modelPage.items); setAccount(accountData); setWallet(walletData); setTransactions(transactionPage.items); setAvatarSeed(accountData.avatar_seed ?? 0);
       } catch (error) { if (!cancelled) showToast(error.message || "数据同步失败"); }
     };
     sync();
@@ -475,5 +417,5 @@ export function App() {
     return () => { cancelled = true; window.clearInterval(timer); };
   }, [authenticated, emptyPreview, syncNonce]);
   const confirmLogout = async () => { try { await api.auth.logout(); } finally { setLogoutOpen(false); setAuthenticated(false); } };
-  return <div className="app-shell">{authenticated ? <div className="app-content"><Topbar view={view} setView={setView} onAccount={() => setView("account")} onAccountSettings={() => setView("account")} onLogout={() => setLogoutOpen(true)} avatarSeed={avatarSeed} credits={wallet.available} />{view === "home" ? <HomeView tasks={tasks} setTasks={setTasks} setView={setView} onToast={showToast} providers={providers} /> : view === "tasks" ? <TaskCenterV2 tasks={tasks} setTasks={setTasks} setView={setView} onToast={showToast} /> : <SettingsHub setView={setView} providers={providers} setProviders={setProviders} onToast={showToast} avatarSeed={avatarSeed} account={account} wallet={wallet} transactions={transactions} />}</div> : <LoginScreen onToast={showToast} onLogin={(session) => { setAccount(session.user); setAvatarSeed(session.user.avatar_seed ?? createBackendAvatarSeed()); setAuthenticated(true); setSyncNonce((value) => value + 1); setView("home"); showToast("登录成功"); }} />}<div className={`toast ${toast ? "show" : ""} ${toast?.tone || ""}`} role="status">{toast?.tone === "warning" ? <IconAlertCircle size={18} /> : <IconCheck size={18} />}{toast?.message || ""}</div>{logoutOpen && <LogoutDialog onClose={() => setLogoutOpen(false)} onConfirm={confirmLogout} />}</div>;
+  return <div className="app-shell">{authenticated ? <div className="app-content"><Topbar view={view} setView={setView} onAccount={() => setView("account")} onAccountSettings={() => setView("account")} onLogout={() => setLogoutOpen(true)} avatarSeed={avatarSeed} credits={wallet.available} />{view === "home" ? <HomeView tasks={tasks} setTasks={setTasks} setView={setView} onToast={showToast} models={models} /> : view === "tasks" ? <TaskCenterV2 tasks={tasks} setTasks={setTasks} setView={setView} onToast={showToast} /> : <SettingsHub setView={setView} onToast={showToast} avatarSeed={avatarSeed} account={account} wallet={wallet} transactions={transactions} />}</div> : <LoginScreen onToast={showToast} onLogin={(session) => { setAccount(session.user); setAvatarSeed(session.user.avatar_seed ?? createBackendAvatarSeed()); setAuthenticated(true); setSyncNonce((value) => value + 1); setView("home"); showToast("登录成功"); }} />}<div className={`toast ${toast ? "show" : ""} ${toast?.tone || ""}`} role="status">{toast?.tone === "warning" ? <IconAlertCircle size={18} /> : <IconCheck size={18} />}{toast?.message || ""}</div>{logoutOpen && <LogoutDialog onClose={() => setLogoutOpen(false)} onConfirm={confirmLogout} />}</div>;
 }

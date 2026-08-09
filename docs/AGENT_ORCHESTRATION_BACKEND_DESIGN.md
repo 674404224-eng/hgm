@@ -14,7 +14,7 @@
 
 1. **确定性业务内核**负责鉴权、参数终审、点数、幂等、任务状态、密钥、队列与结果权限。
 2. **创作 Agent**负责理解意图、分析素材、编译提示词、补全适配当前模型的生成方案和质量报告。
-3. **供应商适配器**把统一 `GenerationSpec` 转换为 Seedance、Vidu 等供应商请求，并归一化状态与错误。
+3. **供应商适配器**把统一 `GenerationSpec` 转换为 Seedance、Vidu 等供应商请求，使用平台托管凭证完成调用，并归一化状态与错误。
 
 第一版无需建设复杂多 Agent。建议先实现单个“创作规划 Agent”，以结构化 JSON 输出为核心；任务执行仍由确定性 Orchestrator 完成。
 
@@ -43,7 +43,7 @@ flowchart LR
 - 对参考图片或视频生成描述、主体约束和风格特征。
 - 将自然语言编译成供应商无关的结构化生成方案。
 - 生成正向提示词、负向提示词、镜头和运动建议。
-- 根据用户选定模型的能力补全和优化提示词、镜头及参数建议。
+- 根据用户从平台目录选定模型的能力补全和优化提示词、镜头及参数建议。
 - 对生成结果做一致性和技术质量评估。
 - 输出失败原因解释和下一次生成建议。
 
@@ -153,7 +153,6 @@ Agent 不应直接输出某个供应商的最终请求体，而应输出供应�
   },
   "model_selection": {
     "source": "user_selected",
-    "provider_id": "provider_01H...",
     "model_id": "seedance-1-0-pro"
   },
   "cost_guard": {
@@ -169,7 +168,7 @@ Agent 不应直接输出某个供应商的最终请求体，而应输出供应�
 - `schema_version` 必填，后端支持向后兼容和迁移。
 - 保存原始提示词、优化提示词、Spec 和最终供应商请求快照的版本关系。
 - 不在 Spec 中保存解密后的密钥、签名 URL、用户内部 ID 或敏感日志字段。
-- Agent 不得修改 `model_selection`；后端必须终审 Provider 所有权、启用状态和模型能力。
+- Agent 不得修改 `model_selection`；后端必须终审平台模型状态、能力和用户可见范围。
 
 ## 5. Agent 子能力设计
 
@@ -201,18 +200,18 @@ Agent 不应直接输出某个供应商的最终请求体，而应输出供应�
 
 ### 5.3 Selected Model Resolver
 
-当前产品由前端用户明确选择 Provider 和模型，因此后端不做模型推荐、评分或二次路由。`Selected Model Resolver` 只负责把用户选择解析为可执行的内部配置。
+当前产品由前端用户从平台目录明确选择模型，因此后端不做模型推荐、评分或二次路由。`Selected Model Resolver` 只负责把用户提交的 `model_id` 解析为平台内部可执行配置。
 
 后端必须依次校验：
 
-- Provider 属于当前用户、未删除且 `enabled=true`。
-- 模型属于该 Provider、`enabled=true`，并与视频/图片模式匹配。
+- 模型属于平台开放目录、`status=available`，并对当前用户可见。
+- 模型与视频/图片模式匹配。
 - 画幅、清晰度、时长、音频、参考素材等参数属于模型能力集合。
-- Provider 健康状态、配额和熔断状态允许创建新任务。
+- 平台 Provider 健康状态、配额和熔断状态允许创建新任务。
 - 数据区域、内容政策和服务端计价规则满足执行要求。
 - 选定模型存在对应的 Provider Adapter 和供应商模型标识。
 
-解析结果应包含 `provider_id`、`provider_model_id`、`adapter_type`、`provider_model_key` 和创建时能力/价格快照。
+解析结果应包含内部 `credential_id`、`provider_model_id`、`adapter_type`、`provider_model_key` 和创建时能力/价格快照；除公开模型信息外均不得返回前端。
 
 如果选定模型不可用，后端返回明确错误和原因，不得静默切换到其他模型。将来若产品增加“智能匹配”，必须作为独立、显式的用户模式设计，不能改变当前默认语义。
 
@@ -264,7 +263,7 @@ Quality Evaluator 不得直接扣点或创建新任务，只能输出 `accept`�
 
 ## 7. 数据模型建议
 
-在现有 `tasks`、`task_events`、`provider_connections`、`provider_models` 基础上增加：
+在现有 `tasks`、`task_events`、平台级 `provider_credentials`、`platform_models` 基础上增加：
 
 ### creative_plans
 
@@ -299,7 +298,7 @@ Quality Evaluator 不得直接扣点或创建新任务，只能输出 `accept`�
 | 字段 | 说明 |
 |---|---|
 | task_id / attempt_no | 唯一组合键 |
-| provider_id / model_id | 用户选定且后端校验通过的模型 |
+| credential_id / model_id | 平台内部凭证与用户选定模型 |
 | provider_job_id | 供应商任务 ID |
 | request_snapshot | 已脱敏请求快照 |
 | status / error_code | 尝试状态 |
@@ -339,7 +338,6 @@ Async Workers
 
 ```json
 {
-  "provider_id": "provider_01H...",
   "model_id": "seedance-1-0-pro",
   "creative_plan_id": null,
   "agent_options": {
@@ -386,8 +384,8 @@ validating -> planning -> reserving -> submitting
 
 ## 11. 安全与隐私
 
-- Agent 服务不得拥有钱包写权限和 API Key 管理权限。
-- 只有 Provider Adapter 受控进程可以按连接 ID 请求解密密钥。
+- Agent 服务不得拥有钱包写权限和平台 API Key 管理权限。
+- 只有 Provider Adapter 受控进程可以按内部 `secret_reference` 请求解密平台密钥。
 - Agent 日志默认删除提示词原文、完整素材 URL、手机号、Token 和 API Key。
 - 素材访问使用短期签名并限制来源、用途和有效期。
 - 保存 Agent 输入输出时按用户内容数据分类加密和设置保留期。
@@ -429,8 +427,8 @@ validating -> planning -> reserving -> submitting
 ### 13.2 选定模型解析测试
 
 - 不支持参数的模型必须被过滤。
-- 停用、无权限、失效和熔断 Provider 不可选。
-- Agent 不得修改用户提交的 Provider 和模型。
+- 维护、下线、无权限或内部 Provider 熔断的模型不可创建任务。
+- Agent 不得修改用户提交的 `model_id`。
 - Provider 不可用时返回明确错误，不得静默使用其他模型。
 - 解析后的 Adapter、供应商模型标识、能力与价格快照可追踪。
 
