@@ -1,0 +1,28 @@
+name: frontend-ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify generated OpenAPI types
+        run: |
+          npm run generate:api-types
+          git diff --exit-code -- src/types/openapi.d.ts
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run test:contract
+      - run: npm run test:sites
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e

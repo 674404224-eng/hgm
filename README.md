@@ -1,6 +1,16 @@
 # 策量智算 Video Studio
 
-面向 AI 视频与图片生成的前端联调项目。当前版本已经从纯 HTML 原型升级为 React + Vite 应用，内置 Mock 数据层，并提供可供后端直接实现的 OpenAPI 3.1 契约。
+面向 AI 视频与图片生成的前端联调项目。当前版本已经从纯 HTML 原型升级为可直接联调的 React + TypeScript 应用，内置 Mock 数据层，并提供可供后端直接实现的 OpenAPI 3.1 契约。
+
+## 技术栈
+
+- React 19 + Vite 6 + TypeScript
+- React Router：真实 URL 路由与刷新恢复
+- TanStack Query：服务端数据缓存、轮询和失效刷新
+- React Hook Form + Zod：表单状态与提交校验
+- OpenAPI Typescript：由 `openapi/openapi.json` 生成接口类型
+- Vitest + Testing Library：组件和 API 层测试
+- Playwright：核心业务浏览器冒烟测试
 
 ## 本地运行
 
@@ -11,6 +21,14 @@ npm run dev
 ```
 
 默认使用 Mock API，可独立体验登录、平台模型创作、任务中心、账户设置和余额交易等流程。
+
+主要路由：
+
+- `/`：创作首页
+- `/tasks`：任务中心
+- `/settings/account`：账户与 AID
+- `/settings/balance`：余额与交易记录
+- `/login`：手机号验证码登录
 
 ## 后端联调
 
@@ -34,16 +52,24 @@ VITE_API_BASE_URL=http://localhost:8080/api/v1
 ## 质量检查
 
 ```bash
+npm run generate:api-types
+npm run typecheck
+npm test
+npm run test:e2e
 npm run test:contract
 npm run test:sites
 npm run build
 ```
 
+后端修改 OpenAPI 契约后，应先运行 `npm run generate:api-types`，前端请求与页面所使用的领域类型会随契约更新；类型检查失败即表示接口发生了未适配的破坏性变更。
+
 ## 目录
 
-- `src/`：React 页面、交互与 API 适配层
-- `src/api/`：Mock/HTTP 双模式数据访问层
+- `src/`：React + TypeScript 页面、交互与应用入口
+- `src/api/`：Mock/HTTP 双模式数据访问层与 Query Hooks
+- `src/features/`：按业务领域拆分的功能组件
+- `src/types/`：OpenAPI 生成类型与领域类型
 - `openapi/`：后端接口契约
 - `docs/`：PRD 与联调说明
 - `worker/`：静态站点运行入口
-- `tests/`：契约和运行时测试
+- `tests/`：组件、接口、浏览器、契约和运行时测试
