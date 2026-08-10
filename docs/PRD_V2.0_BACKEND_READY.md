@@ -1,12 +1,15 @@
 # 策量智算 · AI 内容创作平台 PRD
 
-> 文档版本：V2.0（后端开发版）  
+> 文档版本：V2.1（P0 契约冻结版）
 > 文档状态：开发基线  
-> 更新日期：2026-08-08  
-> 产品范围：Web 端 AI 视频/图片生成、任务中心、账户、创作点、模型 API 连接  
+> 更新日期：2026-08-10
+>
+> 产品范围：Web 端 AI 视频/图片生成、任务中心、账户、创作点、平台模型目录
 > 交互基线：当前 `策量智算_HTML原型_V1.2` 运行结果  
 > 接口基线：[`openapi/openapi.json`](../openapi/openapi.json)  
 > 联调说明：[`docs/BACKEND_INTEGRATION.md`](./BACKEND_INTEGRATION.md)
+> API 快速参考：[`docs/API_REFERENCE.md`](./API_REFERENCE.md)
+> 一期模型政策：[`docs/PHASE1_PLATFORM_MODEL_POLICY.md`](./PHASE1_PLATFORM_MODEL_POLICY.md)
 
 ## 0. 文档使用规则
 
@@ -22,8 +25,8 @@
 - 首页就是创作工作台，仅支持“视频生成”和“图片生成”。
 - 一级导航仅保留“首页”和“任务中心”。
 - 不建设素材库、团队空间、智能分镜和在线剪辑。
-- API Key 不得出现在创建页，不得由前端保存或再次读取完整值。
-- 用户中心分为“账户、余额、API Keys”三个子页面，不提供团队管理。
+- 第一期仅允许平台运营人员在服务端配置模型供应商 API Key；用户端不提供第三方 Key 的新增、编辑、删除、复制或回显能力。
+- 用户中心仅分为“账户、余额”两个子页面，不提供 API Keys 或团队管理。
 - AID 是系统生成、不可修改、不可枚举的唯一用户标识。
 - 所有长列表均由服务端分页；任务创建、扣点和退款必须可幂等、可追溯。
 
@@ -31,21 +34,21 @@
 
 ### 1.1 产品定位
 
-策量智算是一款轻量 AI 内容创作平台。用户通过手机号验证码登录，在首页组合提示词与参考素材，选择已连接模型和生成参数后提交异步任务；系统负责素材安全上传、模型供应商调用、任务进度同步、结果播放下载和创作点结算。
+策量智算是一款轻量 AI 内容创作平台。用户通过手机号验证码登录，在首页组合提示词与参考素材，从平台开放模型目录选择模型和生成参数后提交异步任务；系统负责素材安全上传、平台凭证调用、任务进度同步、结果播放下载和创作点结算。
 
 ### 1.2 目标用户
 
 - 内容创作者：快速生成短视频、宣传图和概念样片。
 - 品牌/电商运营：制作商品展示、社媒内容和营销素材。
 - 市场策划：在方案阶段快速验证视觉方向。
-- AI 工具重度用户：连接多个供应商并精确控制模型和输出参数。
+- AI 工具重度用户：从平台开放模型中选择并精确控制输出参数。
 
 ### 1.3 产品目标
 
 - 用户在单页内完成输入、配置、提交与进度追踪。
 - 后端屏蔽供应商差异，提供统一模型、任务、计费和结果协议。
 - 同一业务操作不会因重试产生重复任务或重复扣点。
-- API Key、上传文件、结果文件和账户数据满足生产安全要求。
+- 平台 API Key、上传文件、结果文件和账户数据满足生产安全要求。
 - 任务、余额、交易记录可以互相对账并定位到请求与供应商调用。
 
 ### 1.4 非目标
@@ -58,6 +61,8 @@ V2.0 不包含：
 - 充值支付、发票、退款申请和套餐购买页面。
 - 模型训练、LoRA、数字人或工作流编排。
 - 用户自定义头像、密码登录和第三方 OAuth 登录。
+- 用户自带 Key（BYOK）、用户自定义 Endpoint 和用户级供应商连接。
+- 基于 Agent 的自动选模或静默切换模型；第一期模型由用户明确选择。
 
 ## 2. 角色、权限与数据边界
 
@@ -67,7 +72,7 @@ V2.0 仅有“登录用户”一个产品角色。所有业务资源均归属于
 |---|---|---|---|
 | 账户 | 当前用户 | 无（V2.0 不支持改资料） | 只能通过会话读取 `/me` |
 | 钱包/交易 | 当前用户 | 系统写入 | 客户端不可直接改余额或创建流水 |
-| 模型连接 | 当前用户 | 当前用户 | 只能访问自己的 Provider；完整 Key 仅写入一次 |
+| 模型目录 | 当前用户 | 无 | 只读平台已开放且可用的模型；不返回凭证或内部连接信息 |
 | 上传素材 | 当前用户 | 当前用户 | `asset_id` 与 `user_id` 强绑定 |
 | 生成任务 | 当前用户 | 当前用户 | 查询、删除、播放前均校验所有权 |
 | 任务结果 | 当前用户 | 无 | 仅对已完成且未删除任务签发短期地址 |
@@ -109,7 +114,7 @@ V2.0 仅有“登录用户”一个产品角色。所有业务资源均归属于
 
 - 账户：姓名、手机号、头像和 AID；AID、手机号可复制，AID 不可编辑。
 - 余额：可用创作点、本月已用、用量进度、交易记录。
-- API Keys：多供应商模型连接的新增、验证、启停、编辑、复制脱敏标识和删除。
+- 余额页附带说明：模型服务由平台统一提供与维护，创作点包含模型调用、智能处理与结果存储服务。
 
 不显示账户安全卡、编辑资料、管理套餐、套餐名称、套餐有效期和团队管理。
 
@@ -121,11 +126,10 @@ V2.0 仅有“登录用户”一个产品角色。所有业务资源均归属于
 erDiagram
   USER ||--|| WALLET : owns
   USER ||--o{ SESSION : has
-  USER ||--o{ PROVIDER_CONNECTION : configures
-  PROVIDER_CONNECTION ||--o{ PROVIDER_MODEL : exposes
+  PROVIDER_CREDENTIAL ||--o{ PLATFORM_MODEL : exposes
   USER ||--o{ ASSET : uploads
   USER ||--o{ TASK : creates
-  TASK }o--|| PROVIDER_MODEL : uses
+  TASK }o--|| PLATFORM_MODEL : uses
   TASK }o--o| ASSET : references
   TASK ||--o{ TASK_EVENT : records
   WALLET ||--o{ WALLET_TRANSACTION : posts
@@ -175,36 +179,35 @@ AID 推荐格式为 `clzs-` 加 16～24 位随机 Base32 字符；不得包含�
 | attempts | smallint | 最大 5 次 |
 | consumed_at | timestamptz nullable | 一次性消费 |
 
-#### provider_connections
+#### provider_credentials（平台内部）
 
 | 字段 | 类型 | 规则 |
 |---|---|---|
-| id | uuid | 主键，前端 `provider_id` |
-| user_id | uuid | 组合索引 |
-| name | varchar(60) | 用户可识别名称 |
-| endpoint | varchar(255) | 必须通过服务端 URL 安全校验 |
+| id | uuid | 内部主键，不返回用户端 |
+| provider_key | varchar(60) | 平台供应商标识，唯一索引 |
+| endpoint | varchar(255) | 平台审核并配置的 HTTPS Endpoint |
 | api_key_ciphertext | text | KMS/信封加密密文 |
-| key_last4 | char(4) | 用于脱敏展示 |
-| enabled | boolean | 是否可被新任务选择 |
+| secret_reference | text | 推荐只保存 Secret Manager 引用 |
+| enabled | boolean | 是否允许平台模型调用 |
 | health_status | varchar(20) | unknown / valid / invalid |
 | last_verified_at | timestamptz nullable | 最近验证时间 |
-| deleted_at | timestamptz nullable | 软删除 |
 | created_at / updated_at | timestamptz | UTC |
 
-必须唯一约束 `(user_id, name, deleted_at is null)`；日志和审计只记录连接 ID 与 Key 尾号。
+凭证只允许平台运维后台或受控发布流程写入；用户 API、Web 构建产物和普通业务日志均不得出现完整 Key。
 
-#### provider_models
+#### platform_models
 
 | 字段 | 类型 | 规则 |
 |---|---|---|
 | id | uuid | 内部主键 |
-| provider_id | uuid | 外键、索引 |
+| credential_id | uuid | 外键、索引，仅内部可见 |
 | model_key | varchar(100) | 实际供应商模型标识 |
-| display_name | varchar(100) | 前端展示名 |
+| display_name | varchar(100) | 平台内部展示名，对外映射为 OpenAPI `Model.name` |
 | mode | varchar(10) | video / image |
 | capabilities | jsonb | 支持的画幅、分辨率、时长、音频、水印等 |
 | pricing_rule | jsonb | 服务端计价规则 |
-| enabled | boolean | 连接内模型开关 |
+| status | varchar(20) | available / maintenance / disabled |
+| audience_rule | jsonb | 当前用户是否可见的灰度/权限规则 |
 
 #### assets
 
@@ -227,7 +230,7 @@ AID 推荐格式为 `clzs-` 加 16～24 位随机 Base32 字符；不得包含�
 |---|---|---|
 | id | uuid | 前端 `task_id` |
 | user_id | uuid | 分页与鉴权索引 |
-| provider_id / provider_model_id | uuid | 创建时快照关联 |
+| platform_model_id | uuid | 用户选定的平台模型，创建时快照关联 |
 | mode | varchar(10) | video / image |
 | title | varchar(100) | 从提示词安全截取或服务端生成 |
 | prompt_ciphertext | text | 按敏感内容策略加密或受控访问 |
@@ -237,7 +240,7 @@ AID 推荐格式为 `clzs-` 加 16～24 位随机 Base32 字符；不得包含�
 | progress | smallint | 0～100 |
 | estimated_cost | integer | 服务端估算值 |
 | billed_cost | integer | 最终扣点，未结算前为 0 |
-| provider_job_id | varchar(255) nullable | 供应商任务标识，唯一索引建议带 provider_id |
+| provider_job_id | varchar(255) nullable | 供应商任务标识，唯一索引建议带 platform_model_id |
 | result_object_key | text nullable | 私有结果对象键 |
 | poster_object_key | text nullable | 私有封面对象键 |
 | error_code / error_message | varchar/text nullable | 面向产品的归一化错误 |
@@ -273,7 +276,7 @@ AID 推荐格式为 `clzs-` 加 16～24 位随机 Base32 字符；不得包含�
 
 #### audit_logs
 
-记录登录风险、连接新增/编辑/启停/验证/删除、签发播放地址和人工余额调整。不得记录完整验证码、访问令牌、刷新令牌、API Key、提示词原文或签名 URL 查询参数。
+记录登录风险、平台凭证变更、模型启停、签发播放地址和人工余额调整。不得记录完整验证码、访问令牌、刷新令牌、API Key、提示词原文或签名 URL 查询参数。
 
 ## 5. 核心流程与逻辑
 
@@ -316,49 +319,28 @@ sequenceDiagram
 - `avatar_seed` 由后端从批准的图标库种子范围安全随机生成；相同 seed 必须稳定映射到同一头像。
 - 停用用户访问任一业务接口均返回 `ACCOUNT_DISABLED`。
 
-### 5.3 模型 API 连接
+### 5.3 平台模型与凭证管理
 
-#### 新增
-
-1. 用户提交名称、Endpoint、API Key、启用状态和可选模型列表。
-2. 服务端校验 URL：只允许 HTTPS；拒绝 localhost、环回地址、链路本地地址、内网网段、云元数据地址和 DNS 重绑定结果。
-3. API Key 进入应用后立即交给 KMS/密钥服务加密，不得写入普通日志或 APM 参数。
-4. 保存密文与末四位，响应 `credential` 仅返回如 `••••••••9K2M`。
-5. 创建成功后可异步或显式调用 `/verify` 验证；验证失败不删除连接，但置 `health_status=invalid`。
-
-#### 编辑与启停
-
-- PATCH 为部分更新；未提交 `api_key` 表示保留原密钥。
-- 只有提交新 `api_key` 时才替换密文与末四位。
-- 停用后不得被新任务选择；已提交任务继续使用创建时的连接快照完成。
-- 更新 Endpoint、Key 或模型列表后，健康状态重置为 `unknown`，需要重新验证。
-
-#### 验证
-
-- 验证请求调用供应商轻量鉴权/模型列表接口，超时建议 10 秒。
-- 返回 `valid`、`latency_ms` 和可展示 `message`；供应商原始响应先脱敏再映射。
-- 对单连接验证限流为每分钟 5 次。
-
-#### 复制与删除
-
-- “复制 Key”只能复制脱敏标识，不得提供解密或完整 Key 回读接口。
-- 删除前校验是否有 `queued` 或 `generating` 任务引用；有则返回 409 `PROVIDER_IN_USE`。
-- 无在途任务时执行软删除；历史任务保留供应商名称和模型快照。
+- 用户端只读 `GET /models`，不提供 `/providers`、Key CRUD、Key 验证、Endpoint 配置或凭证回显接口。
+- 平台运营人员通过独立受控后台或部署流程配置供应商 Endpoint、密钥引用、模型能力、价格和开放范围；该后台不属于本期用户产品范围。
+- API Key 必须保存于 Secret Manager/KMS，业务数据库优先只保存 `secret_reference`；只有 Provider Adapter Worker 具备按引用读取权限。
+- 模型健康检查由平台后台定时执行。模型不可用时把状态改为 `maintenance` 或 `disabled`，新任务返回稳定错误，不得替用户静默切换模型。
+- 已创建任务保存模型、能力、价格和适配器版本快照，平台后续修改目录不得改变历史任务语义。
 
 ### 5.4 模型能力与参数联动
 
-首页只展示同时满足以下条件的模型：连接未删除、`enabled=true`、模型 `enabled=true`、模式匹配、健康状态不是 `invalid`。
+首页只展示同时满足以下条件的模型：平台已开放给当前用户、`status=available`、模式匹配且能力配置完整。
 
-当前 OpenAPI 的 `GET /providers` 已返回模型列表。后端必须以 `provider_models.capabilities` 做最终校验，不能只依赖前端下拉框。
+当前 OpenAPI 以 `GET /models` 返回平台模型目录。后端必须以 `platform_models.capabilities` 做最终校验，不能只依赖前端下拉框。
 
 | 参数 | 视频模式 | 图片模式 | 校验规则 |
 |---|---|---|---|
 | prompt | 必填 | 必填 | Trim 后 1～1000 字符 |
-| model | 必填 | 必填 | 必须属于当前用户已启用连接且模式匹配 |
+| model_id | 必填 | 必填 | 必须来自当前用户可见的平台模型目录且模式匹配 |
 | aspect | 必填 | 必填 | 16:9 / 9:16 / 1:1 / 4:3，且模型支持 |
 | resolution | 必填 | 必填 | 必须属于模型能力集合 |
 | duration | 必填 | 不适用 | 5s / 10s / 15s / 30s，且模型支持 |
-| count | 不适用 | 必填 | 1 / 2 / 4；P0 需加入 OpenAPI |
+| count | 不适用 | 必填 | 1 / 2 / 4，且必须属于模型能力集合 |
 | sound | 可选 | 忽略/拒绝 | 仅模型支持时允许 true |
 | watermark | 可选 | 当前不支持 | 1～20 字符；只有启用水印时提交 |
 | reference_asset_id | 可选 | 可选 | 属于当前用户且状态 ready，MIME 与模型兼容 |
@@ -397,7 +379,7 @@ sequenceDiagram
 
 #### 服务端计价
 
-客户端提交的 `estimated_cost` 仅用于展示对比，不能作为扣点依据。服务端按以下输入计算：
+客户端提交的 `max_points` 仅代表用户确认的最高点数，不能作为实际扣点依据。服务端计算权威 `estimated_cost`，并按以下输入计价：
 
 - 模型与供应商计价规则。
 - 模式、分辨率、时长或图片数量。
@@ -429,7 +411,7 @@ sequenceDiagram
 - `Idempotency-Key` 必填且为 UUID；同用户同操作至少保留 24 小时。
 - 相同 Key + 相同请求体：返回首次成功响应，不再创建、不再扣点。
 - 相同 Key + 不同请求体：返回 409 `IDEMPOTENCY_CONFLICT`。
-- 校验顺序：会话 → 幂等 → 参数 → 连接/模型 → 素材 → 服务端计价 → 余额 → 事务写入。
+- 校验顺序：会话 → 幂等 → 参数 → 平台模型可用性 → 素材 → 服务端计价 → 余额 → 事务写入。
 - 钱包加行锁或使用版本号 CAS，保证并发请求不能把余额扣成负数。
 - 任务记录、点数预留/扣减、交易流水、幂等记录和 Outbox 必须在同一数据库事务，或采用可证明一致的 Saga。
 - 队列发布失败时由 Outbox 重试，不回滚已经成功返回的任务。
@@ -516,7 +498,7 @@ stateDiagram-v2
 ### 5.11 结果播放与下载
 
 - 仅 `done` 状态允许调用 `GET /tasks/{task_id}/result`。
-- 返回短期 `playback_url`、可选 `download_url`、`poster_url`、真实 `media_type` 和 `expires_at`。
+- 返回 `TaskResult.items[]`；每项包含短期 `playback_url`、可选 `download_url`、`poster_url` 和真实 `media_type`，顶层返回统一 `expires_at`。
 - URL 默认 10 分钟有效，来自私有 CDN/对象存储；不得返回永久公开地址。
 - 视频结果返回可 Range 请求的 `video/mp4` 或实际格式；图片结果返回相应图片 MIME。
 - 地址过期后前端重新请求结果接口；不复用或刷新旧签名。
@@ -536,11 +518,7 @@ stateDiagram-v2
 | 账户 | GET `/me` | 当前账户、AID、头像 seed | Account |
 | 钱包 | GET `/wallet` | 可用余额、本月已用、使用百分比 | Wallet |
 | 流水 | GET `/wallet/transactions` | 所有权、服务端分页 | TransactionPage |
-| 连接列表 | GET `/providers` | 当前用户未删除连接 | ProviderList |
-| 新增连接 | POST `/providers` | URL 安全、Key 加密、模型保存 | 201 Provider |
-| 编辑/启停 | PATCH `/providers/{id}` | 部分更新、重新验证 | Provider |
-| 删除连接 | DELETE `/providers/{id}` | 在途引用检查、软删除 | 204 |
-| 验证连接 | POST `/providers/{id}/verify` | 供应商轻量验证、脱敏映射 | ProviderVerification |
+| 模型目录 | GET `/models` | 当前用户可见、平台开放、能力和状态过滤 | ModelList |
 | 预签名上传 | POST `/uploads/presign` | MIME/大小/配额、安全对象键 | PresignUploadResponse |
 | 创建任务 | POST `/tasks` | 幂等、参数、计价、余额、事务、Outbox | 201 Task |
 | 任务列表 | GET `/tasks` | 状态/搜索/分页/稳定排序 | TaskPage |
@@ -548,21 +526,21 @@ stateDiagram-v2
 | 删除任务 | DELETE `/tasks/{id}` | 状态冲突、软删除 | 204 |
 | 任务结果 | GET `/tasks/{id}/result` | 完成态、短期签名 | TaskResult |
 
-### 6.2 OpenAPI 上线前必须补齐的字段
+### 6.2 OpenAPI P0 冻结字段
 
-当前契约可启动联调，但后端正式开发时应在不破坏现有字段的前提下补齐：
+OpenAPI 1.1.0 已完成以下 P0 契约收敛，前后端不得再使用旧字段：
 
-- `Account.phone` 仅代表当前会话用户本人的手机号；接口说明需明确该字段属于敏感数据，禁止缓存到共享客户端、日志或埋点。
-- `Provider` 增加 `health_status`、`last_verified_at`；模型建议增加稳定 `id/model_key/display_name/capabilities`。
-- `CreateTaskRequest.model` 建议替换/补充 `provider_model_id`，避免不同连接存在同名模型。
-- 图片模式增加 `count`，范围 1～4。
-- `Task.created` 改为 RFC 3339 的 `created_at`；`meta` 拆为结构化参数；保留旧字段时标记 deprecated。
-- `Task` 增加 `mode`、`provider_id`、`provider_model_id`、`finished_at`、结构化 `error`。
-- `TaskResult` 对多图片结果支持 `items[]`；当前单结果字段兼容保留。
-- `PageMeta` 可增加 `has_next`；服务端仍以 `total` 作为权威。
-- 所有 2xx 响应返回 `X-Request-ID` 响应头；所有 429 响应提供 `Retry-After`。
+- `Account.phone` 明确为当前会话用户本人的敏感数据，禁止写入共享缓存、日志或埋点。
+- `Model` 使用稳定 `id`，返回 `name/provider_name/mode/status/capabilities/base_points`，不返回凭证或内部连接 ID。
+- `CreateTaskRequest.model_id` 必须来自 `GET /models`；不接受模型名称、Provider ID、Endpoint 或 API Key。
+- 图片模式 `count` 必须与所选模型 `capabilities.counts` 匹配。
+- `Task` 使用 RFC 3339 的 `created_at`、`finished_at`，并包含 `mode`、`model_id`、结构化 `parameters` 和结构化 `error`。
+- 旧的 `Task.meta`、`Task.created` 和 `Task.image` 已移除；展示摘要由前端根据 `parameters` 组合，缩略图使用 `thumbnail_url`。
+- 视频和多图片结果统一使用 `TaskResult.items[]`，每项包含独立媒体类型及短期播放/下载地址。
+- `PageMeta` 必须返回 `has_next`，同时保留 `total` 作为权威总数。
+- 所有 2xx 和统一错误响应返回 `X-Request-ID`；所有 429 响应提供 `Retry-After`。
 
-这些补齐属于 P0 契约完善，不改变当前页面信息架构。
+后续新增字段优先保持向后兼容；删除字段、修改枚举或改变必填性必须提升接口版本，并同步生成类型、本文和 API 参考。
 
 ## 7. 统一错误协议
 
@@ -590,14 +568,12 @@ stateDiagram-v2
 | 404 | RESOURCE_NOT_FOUND | 资源不存在或不属于当前用户 | 返回列表/关闭弹窗 |
 | 409 | IDEMPOTENCY_CONFLICT | 同 Key 不同请求体 | 生成新 Key 前先确认用户意图 |
 | 409 | COST_CHANGED | 服务端估价超过确认阈值 | 展示新费用并二次确认 |
-| 409 | PROVIDER_IN_USE | 连接仍有在途任务 | 提示先等待任务结束 |
 | 409 | TASK_STATE_CONFLICT | 当前状态不允许删除/操作 | 刷新任务状态 |
 | 409 | TASK_NOT_READY | 结果未就绪 | 继续轮询 |
 | 410 | RESULT_EXPIRED | 结果已按策略清理 | 提示结果不可用 |
 | 413 | ASSET_TOO_LARGE | 素材超过 500 MiB | 要求更换/压缩 |
 | 422 | TASK_INVALID_PARAMETERS | 模型参数组合不支持 | 按 `details.fields` 修正 |
 | 422 | ASSET_INVALID | 素材未就绪、格式不符或扫描失败 | 重新上传 |
-| 422 | PROVIDER_INVALID | 连接验证失败 | 前往 API Keys 修复 |
 | 422 | MODEL_NOT_AVAILABLE | 模型未启用/模式不匹配 | 刷新模型列表 |
 | 402 | INSUFFICIENT_BALANCE | 可用点数不足 | 展示所需和当前点数 |
 | 429 | RATE_LIMITED | 通用限流 | 按 Retry-After 重试 |
@@ -610,12 +586,13 @@ stateDiagram-v2
 
 ## 8. 安全与隐私要求
 
-### 8.1 API Key
+### 8.1 平台 API Key
 
 - 传输必须使用 TLS 1.2+；数据库使用 KMS/信封加密，密钥按环境隔离。
-- 完整 Key 只存在于创建/更新请求的短暂内存和调用供应商的受控进程。
+- 完整 Key 只存在于平台受控配置流程、Secret Manager/KMS 和调用供应商的 Adapter Worker 内存。
+- 用户 API 不接收 `api_key` 或 Endpoint，用户前端、静态资源、浏览器存储和网络响应不出现凭证或脱敏尾号。
 - 禁止进入数据库明文字段、日志、埋点、异常监控、消息队列普通载荷、缓存和前端响应。
-- 对请求体日志中 `api_key` 做默认结构化删除，而非正则事后遮盖。
+- 对平台管理入口和内部消息中的敏感字段做默认结构化删除，而非正则事后遮盖。
 - 生产支持主密钥轮换和密文重新包裹；解密权限只授予供应商调用服务。
 
 ### 8.2 鉴权与越权防护
@@ -623,7 +600,7 @@ stateDiagram-v2
 - 业务接口使用 Bearer Access Token；刷新接口依赖 HttpOnly Cookie。
 - 每次查询在数据库层同时带 `user_id` 条件，不采用“先按 ID 查再判断”的易漏模式。
 - 越权访问资源统一返回 404，避免枚举。
-- AID、task_id、asset_id、provider_id 使用不可预测 UUID/随机标识。
+- AID、task_id、asset_id 使用不可预测 UUID/随机标识。
 - CORS 只允许正式前端域名；携带 Cookie 时不得使用 `*`。
 - Refresh Cookie 场景配置 Origin 校验与 CSRF 防护。
 
@@ -663,7 +640,7 @@ stateDiagram-v2
 - 登录用户普通读取：120 次/分钟/用户。
 - 创建任务：10 次/分钟/用户，另按供应商和账户配额限制。
 - 获取播放地址：30 次/分钟/用户。
-- Provider 写操作：20 次/小时/用户；验证见 5.3。
+- 模型目录：120 次/分钟/用户，可使用短时缓存与 ETag。
 - 以用户、IP、设备风险信号组合限流；429 返回 `Retry-After`。
 
 ### 9.3 可观测性
@@ -679,7 +656,7 @@ stateDiagram-v2
 
 - Auth：短信、会话、令牌轮换和风控。
 - Account：用户、AID、头像 seed。
-- Provider Registry：连接密钥、模型能力、健康验证。
+- Platform Model Registry：平台凭证引用、模型能力、开放范围和健康状态。
 - Asset Service：预签名、上传完成、扫描和清理。
 - Task API：创建、分页、详情、删除、结果签名。
 - Orchestrator Worker：供应商提交、查询/回调、状态机、结果拉取。
@@ -689,7 +666,7 @@ stateDiagram-v2
 供应商适配器统一接口建议：
 
 ```text
-verify(connection) -> VerificationResult
+verify(platformCredential) -> VerificationResult
 estimate(model, parameters) -> points
 submit(taskSnapshot, credential, idempotencyRef) -> providerJobId
 query(providerJobId) -> normalizedStatus/progress/result
@@ -708,13 +685,13 @@ normalizeError(providerResponse) -> productError
 - [ ] 首次登录原子创建用户、不可变 AID、稳定头像 seed 和钱包。
 - [ ] 刷新令牌只在 HttpOnly Cookie，退出后不能再次刷新。
 
-### 11.2 API Keys
+### 11.2 平台模型与凭证
 
-- [ ] 创建/更新后任何接口、日志和数据库普通查询都看不到完整 Key。
-- [ ] 响应只显示掩码与末四位；复制动作不会取回完整 Key。
-- [ ] Endpoint 无法访问内网、环回和云元数据地址。
-- [ ] 停用连接后首页模型不可选；进行中任务不被中断。
-- [ ] 有进行中任务的连接不能删除；无引用连接可软删除。
+- [ ] 用户页面、用户 API、浏览器存储和前端构建产物均不存在 API Key 管理或凭证值。
+- [ ] `GET /models` 只返回当前用户可选模型，不返回内部凭证、Endpoint 或连接 ID。
+- [ ] `POST /tasks` 只接受 `model_id`，服务端解析平台凭证与供应商模型标识。
+- [ ] 只有 Adapter Worker 能按内部引用读取平台 Key；日志、队列与错误响应不含完整 Key。
+- [ ] 平台停用模型后首页不可选且新任务返回 `MODEL_NOT_AVAILABLE`；进行中任务按创建快照处理。
 
 ### 11.3 上传
 
@@ -741,7 +718,7 @@ normalizeError(providerResponse) -> productError
 
 ### 11.6 安全与观测
 
-- [ ] 跨用户读取 provider、asset、task、result、wallet 均失败。
+- [ ] 跨用户读取 asset、task、result、wallet 均失败；模型目录按开放范围过滤。
 - [ ] 所有错误带稳定 `code` 和 `request_id`，生产响应不含堆栈。
 - [ ] Request ID 能从入口追踪到供应商请求、状态事件和交易流水。
 - [ ] 钱包/交易/任务/供应商账单日对账异常会告警。
@@ -752,8 +729,8 @@ normalizeError(providerResponse) -> productError
 
 1. 数据库迁移、用户/AID/钱包基础模型。
 2. 短信验证码、登录、刷新、退出、鉴权中间件。
-3. Provider CRUD、密钥加密、URL 安全校验、连接验证。
-4. 模型能力与服务端计价模块。
+3. 平台凭证安全托管、平台模型目录、健康检查与开放范围。
+4. 模型能力与服务端计价模块，任务只通过 `model_id` 解析。
 5. 预签名上传、上传完成校验和私有存储。
 6. 钱包预留/结算/退款、不可变流水、幂等记录、Outbox。
 7. 任务创建、列表、详情、删除和结果签名。
@@ -766,7 +743,7 @@ normalizeError(providerResponse) -> productError
 - 图片结果的画廊、单张重试与批量下载体验。
 - 素材状态查询与更细上传进度。
 - SSE/WebSocket 任务更新；保留轮询兼容。
-- Provider 模型能力自动发现与缓存。
+- 平台模型能力自动发现与缓存。
 - 任务重试/复制参数创建新任务。
 - 运营后台的人工调账、供应商健康和对账异常处理。
 
@@ -784,7 +761,7 @@ normalizeError(providerResponse) -> productError
 - P0 接口全部实现并有单元、集成、鉴权、幂等和并发测试。
 - 至少完成一次真实供应商端到端生成：上传 → 扣点 → 生成 → 播放/下载 → 交易记录。
 - 完成供应商失败、超时、重复回调、队列重复投递和退款失败演练。
-- 完成 API Key 泄露扫描、SSRF、越权、AID 枚举、签名 URL 和上传安全测试。
+- 完成平台 API Key 泄露扫描、内部配置入口权限、越权、AID 枚举、签名 URL 和上传安全测试。
 - 日志、指标、追踪、告警和日对账在预发布环境可用。
 - 数据备份、迁移回滚、密钥轮换和对象清理策略已验证。
 - 产品、前端、后端、测试共同按第 11 节验收并签字。
