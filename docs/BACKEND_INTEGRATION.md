@@ -1,6 +1,10 @@
 # 后端联调说明
 
-业务逻辑、状态机、计费、权限、数据模型与验收标准以 [`PRD_V2.0_BACKEND_READY.md`](./PRD_V2.0_BACKEND_READY.md) 为准；HTTP 请求和响应结构以 `openapi/openapi.json` 为准。
+> 文档版本：V1.1
+> 更新日期：2026-08-10
+> 接口基线：OpenAPI 1.1.0（P0 冻结版）
+
+业务逻辑、状态机、计费、权限、数据模型与验收标准以 [`PRD_V2.0_BACKEND_READY.md`](./PRD_V2.0_BACKEND_READY.md) 为准；HTTP 请求和响应结构以 [`openapi/openapi.json`](../openapi/openapi.json) 为准；接口示例见 [`API_REFERENCE.md`](./API_REFERENCE.md)。
 
 ## 运行模式
 
@@ -9,6 +13,14 @@
 - `VITE_API_BASE_URL=http://localhost:8080/api/v1`：后端 API 根地址。
 
 复制 `.env.example` 为本机环境文件并修改变量即可切换。前端接口实现位于 `src/api/`，接口契约位于 `openapi/openapi.json`。
+
+## 前端联调架构
+
+- React Router 负责 `/`、`/tasks`、`/settings/account`、`/settings/balance`、`/login` 的真实 URL 路由。
+- TanStack Query 负责账户、钱包、交易记录、平台模型和任务数据；任务列表每 4 秒轮询。
+- React Hook Form + Zod 负责登录表单校验。
+- `src/api/index.ts` 是 HTTP/Mock 双模式入口，`src/api/hooks.ts` 是 Query 访问层。
+- `src/types/openapi.d.ts` 必须由 OpenAPI 生成，禁止手工修改；`src/types/domain.ts` 只做领域别名。
 
 ## 后端必须满足的安全约束
 
@@ -28,6 +40,14 @@
 - 创建任务、分页读取任务、轮询进度、删除任务和获取播放地址。
 - 统一超时、网络异常和业务错误提示。
 
+任务响应已采用 P0 结构化契约：
+
+- `Task.parameters` 保存画幅、清晰度、时长/数量、音频、水印和素材引用；不再返回展示字符串 `meta`。
+- 时间字段统一为 `created_at`、`finished_at`，使用 RFC 3339。
+- 失败信息使用 `TaskError { code, message, retryable, details }`。
+- 视频和多图片结果统一使用 `TaskResult.items[]`。
+- 任务和交易分页统一返回 `has_next`。
+
 ## 建议联调顺序
 
 1. `/auth/sms-codes`、`/auth/sessions`、`/me`。
@@ -40,6 +60,22 @@
 ## 状态同步
 
 当前前端每 4 秒轮询任务列表。后端可以先按轮询实现；如切换 SSE 或 WebSocket，应保持 `Task` 数据结构和状态枚举不变，以减少前端改造成本。
+
+## 契约与 CI
+
+后端或前端修改接口时必须按顺序执行：
+
+```bash
+npm run generate:api-types
+npm run typecheck
+npm test
+npm run test:contract
+npm run build
+npm run test:sites
+npm run test:e2e
+```
+
+GitHub Actions 会校验生成类型无漂移、OpenAPI 关键字段、单元测试、生产构建、Sites 产物和浏览器核心流程。
 
 ## 错误格式
 

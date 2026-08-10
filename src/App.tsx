@@ -49,6 +49,8 @@ const assets = {
   interior: "/assets/warm-interior.png",
 };
 
+const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+
 const avatarIconLibrary = [IconRobot, IconRocket, IconMoodSmile, IconCat, IconGhost];
 const createBackendAvatarSeed = () => Math.floor(Math.random() * avatarIconLibrary.length);
 
@@ -61,11 +63,11 @@ const recommendations = [
 ];
 
 const initialTasks = [
-  { id: "task-1", title: "新品发布宣传片", meta: "16:9 · 1080P · 30s", cost: 32, status: "done", progress: 100, image: assets.city, created: "刚刚" },
-  { id: "task-2", title: "产品功能演示", meta: "16:9 · 720P · 20s", cost: 18, status: "queued", progress: 0, image: assets.product, created: "2 分钟前" },
-  { id: "task-3", title: "品牌故事短片", meta: "16:9 · 1080P · 45s", cost: 45, status: "generating", progress: 32, image: assets.mountain, created: "5 分钟前" },
-  { id: "task-4", title: "社媒推广视频", meta: "9:16 · 720P · 15s", cost: 16, status: "queued", progress: 0, image: assets.interior, created: "8 分钟前" },
-  { id: "task-5", title: "节日促销海报视频", meta: "1:1 · 1080P · 10s", cost: 14, status: "queued", progress: 0, image: assets.interior, created: "12 分钟前" },
+  { id: "task-1", title: "新品发布宣传片", mode: "video", model_id: "seedance-1-0-pro", parameters: { aspect: "16:9", resolution: "1080P", duration: "30s", sound: true }, cost: 32, status: "done", progress: 100, thumbnail_url: assets.city, created_at: minutesAgo(0), finished_at: minutesAgo(0) },
+  { id: "task-2", title: "产品功能演示", mode: "video", model_id: "seedance-1-0-lite", parameters: { aspect: "16:9", resolution: "720P", duration: "10s", sound: false }, cost: 18, status: "queued", progress: 0, thumbnail_url: assets.product, created_at: minutesAgo(2) },
+  { id: "task-3", title: "品牌故事短片", mode: "video", model_id: "seedance-1-0-pro", parameters: { aspect: "16:9", resolution: "1080P", duration: "30s", sound: true }, cost: 45, status: "generating", progress: 32, thumbnail_url: assets.mountain, created_at: minutesAgo(5) },
+  { id: "task-4", title: "社媒推广视频", mode: "video", model_id: "vidu-q2-pro", parameters: { aspect: "9:16", resolution: "720P", duration: "15s", sound: true }, cost: 16, status: "queued", progress: 0, thumbnail_url: assets.interior, created_at: minutesAgo(8) },
+  { id: "task-5", title: "节日促销海报视频", mode: "video", model_id: "seedance-1-0-lite", parameters: { aspect: "1:1", resolution: "720P", duration: "10s", sound: false }, cost: 14, status: "queued", progress: 0, thumbnail_url: assets.interior, created_at: minutesAgo(12) },
 ] satisfies Task[];
 
 const initialModels = [
@@ -78,17 +80,36 @@ const initialModels = [
 ] satisfies Model[];
 
 const transactionRecords = [
-  { id: "TX-20260808-001", occurred_at: "2026-08-08 14:32", type: "任务消耗", reference: "新品发布宣传片", detail: "Seedance 1.0 Pro", amount: -32 },
-  { id: "TX-20260801-001", occurred_at: "2026-08-01 09:00", type: "套餐发放", reference: "企业专业版月度额度", detail: "有效期至 2026-08-31", amount: 16000 },
-  { id: "TX-20260728-115", occurred_at: "2026-07-28 16:15", type: "任务消耗", reference: "品牌故事短片", detail: "Seedance 1.0 Pro", amount: -45 },
-  { id: "TX-20260720-006", occurred_at: "2026-07-20 11:20", type: "活动奖励", reference: "夏季创作活动", detail: "奖励已到账", amount: 500 },
-  { id: "TX-20260718-103", occurred_at: "2026-07-18 18:06", type: "任务消耗", reference: "产品功能演示", detail: "Vidu Q2 Pro", amount: -18 },
+  { id: "TX-20260808-001", occurred_at: "2026-08-08T14:32:00+08:00", type: "任务消耗", reference: "新品发布宣传片", detail: "Seedance 1.0 Pro", amount: -32 },
+  { id: "TX-20260801-001", occurred_at: "2026-08-01T09:00:00+08:00", type: "套餐发放", reference: "企业专业版月度额度", detail: "有效期至 2026-08-31", amount: 16000 },
+  { id: "TX-20260728-115", occurred_at: "2026-07-28T16:15:00+08:00", type: "任务消耗", reference: "品牌故事短片", detail: "Seedance 1.0 Pro", amount: -45 },
+  { id: "TX-20260720-006", occurred_at: "2026-07-20T11:20:00+08:00", type: "活动奖励", reference: "夏季创作活动", detail: "奖励已到账", amount: 500 },
+  { id: "TX-20260718-103", occurred_at: "2026-07-18T18:06:00+08:00", type: "任务消耗", reference: "产品功能演示", detail: "Vidu Q2 Pro", amount: -18 },
 ] satisfies Transaction[];
 
 const modeConfig = {
   video: { label: "视频生成", icon: IconPlayerPlayFilled, placeholder: "描述你的创意，越具体越好（支持中英文）。例如：@图片1 中的人物在雨夜街头缓慢转身，霓虹灯映照在湿润地面上，电影感。" },
   image: { label: "图片生成", icon: IconPhoto, placeholder: "描述想生成的画面、主体、构图、光线和风格。例如：极简科技产品摄影，深蓝背景，冷色轮廓光，居中构图。" },
 };
+
+const taskMeta = (task: Task) => {
+  const parameters = task.parameters;
+  const output = parameters.duration || (parameters.count ? `${parameters.count} 张` : "");
+  return [parameters.aspect, parameters.resolution, output].filter(Boolean).join(" · ");
+};
+
+const taskThumbnail = (task: Task) => task.thumbnail_url || assets.city;
+
+const taskCreatedLabel = (task: Task) => {
+  const minutes = Math.max(0, Math.floor((Date.now() - Date.parse(task.created_at)) / 60_000));
+  if (minutes < 1) return "刚刚";
+  if (minutes < 60) return `${minutes} 分钟前`;
+  return new Date(task.created_at).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+};
+
+const formatDateTime = (value: string) => new Date(value).toLocaleString("zh-CN", {
+  year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false,
+});
 
 function Brand() {
   return <div className="brand" aria-label="策量智算 Video Studio"><span className="brand-mark"><IconSparkles size={31} stroke={2.1} /></span><span className="brand-copy"><strong>策量智算</strong><small>VIDEO STUDIO</small></span></div>;
@@ -208,7 +229,7 @@ function ComposerWithInitial({ initialPrompt, onGenerate, onToast, models }) {
 }
 
 function TaskMiniCard({ task }) {
-  return <article className="task-mini"><img src={task.image} alt="" /><div className="task-mini-body"><strong>{task.title}</strong><span>{task.meta}</span>{task.status === "generating" ? <><em>生成中 {task.progress}%</em><div className="progress"><i style={{ width: `${task.progress}%` }} /></div></> : task.status === "done" ? <em className="done">已完成</em> : <><em className="muted">排队中</em><div className="progress"><i style={{ width: "0%" }} /></div></>}</div></article>;
+  return <article className="task-mini"><img src={taskThumbnail(task)} alt="" /><div className="task-mini-body"><strong>{task.title}</strong><span>{taskMeta(task)}</span>{task.status === "generating" ? <><em>生成中 {task.progress}%</em><div className="progress"><i style={{ width: `${task.progress}%` }} /></div></> : task.status === "done" ? <em className="done">已完成</em> : <><em className="muted">排队中</em><div className="progress"><i style={{ width: "0%" }} /></div></>}</div></article>;
 }
 
 function ActiveTasks({ tasks, setView }) {
@@ -239,8 +260,9 @@ function HomeView({ tasks, setTasks, setView, onToast, models }) {
 }
 
 function VideoPreviewDialog({ task, onClose }) {
-  const duration = Number(task.meta.match(/(\d+)s/)?.[1] || 30);
-  const isRealVideo = task.result?.media_type?.startsWith("video/");
+  const media = task.result?.items?.[0];
+  const duration = Number(task.parameters.duration?.replace("s", "") || media?.duration_seconds || 30);
+  const isRealVideo = media?.media_type?.startsWith("video/");
   const [playing, setPlaying] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
   useEffect(() => {
@@ -260,7 +282,7 @@ function VideoPreviewDialog({ task, onClose }) {
     if (currentTime >= duration) setCurrentTime(0);
     setPlaying((value) => !value);
   };
-  return <div className="modal-backdrop video-preview-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><section className="video-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="video-preview-title"><header><div><h2 id="video-preview-title">{task.title}</h2><p>{task.meta} · 消耗 {task.cost} 创作点</p></div><button aria-label="关闭播放窗口" onClick={onClose}><IconX size={19} /></button></header>{isRealVideo ? <video className="real-video-player" src={task.result.playback_url} poster={task.result.poster_url || task.image} controls autoPlay playsInline /> : <><div className={`video-stage ${playing ? "playing" : ""}`} style={{ backgroundImage: `url(${task.result?.poster_url || task.image})` }}><button className="video-main-control" aria-label={playing ? "暂停视频" : "播放视频"} onClick={togglePlayback}>{playing ? <IconPlayerPauseFilled size={28} /> : <IconPlayerPlayFilled size={28} />}</button><div className="video-motion-overlay" /></div><footer><button aria-label={playing ? "暂停视频" : "播放视频"} onClick={togglePlayback}>{playing ? <IconPlayerPauseFilled size={18} /> : <IconPlayerPlayFilled size={18} />}</button><span>{String(Math.floor(currentTime / 60)).padStart(2, "0")}:{String(currentTime % 60).padStart(2, "0")}</span><div className="video-seek"><i style={{ width: `${(currentTime / duration) * 100}%` }} /></div><span>{String(Math.floor(duration / 60)).padStart(2, "0")}:{String(duration % 60).padStart(2, "0")}</span></footer></>}</section></div>;
+  return <div className="modal-backdrop video-preview-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><section className="video-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="video-preview-title"><header><div><h2 id="video-preview-title">{task.title}</h2><p>{taskMeta(task)} · 消耗 {task.cost} 创作点</p></div><button aria-label="关闭播放窗口" onClick={onClose}><IconX size={19} /></button></header>{isRealVideo ? <video className="real-video-player" src={media.playback_url} poster={media.poster_url || taskThumbnail(task)} controls autoPlay playsInline /> : <><div className={`video-stage ${playing ? "playing" : ""}`} style={{ backgroundImage: `url(${media?.poster_url || taskThumbnail(task)})` }}><button className="video-main-control" aria-label={playing ? "暂停视频" : "播放视频"} onClick={togglePlayback}>{playing ? <IconPlayerPauseFilled size={28} /> : <IconPlayerPlayFilled size={28} />}</button><div className="video-motion-overlay" /></div><footer><button aria-label={playing ? "暂停视频" : "播放视频"} onClick={togglePlayback}>{playing ? <IconPlayerPauseFilled size={18} /> : <IconPlayerPlayFilled size={18} />}</button><span>{String(Math.floor(currentTime / 60)).padStart(2, "0")}:{String(currentTime % 60).padStart(2, "0")}</span><div className="video-seek"><i style={{ width: `${(currentTime / duration) * 100}%` }} /></div><span>{String(Math.floor(duration / 60)).padStart(2, "0")}:{String(duration % 60).padStart(2, "0")}</span></footer></>}</section></div>;
 }
 
 function Pagination({ total, page, onPageChange, pageSize = 4 }) {
@@ -281,7 +303,7 @@ function TransactionRecords({ records = transactionRecords }) {
       </div>
       <div className="transaction-table" role="table" aria-label="创作点交易记录">
         <div className="transaction-row transaction-table-head" role="row"><span>时间</span><span>类型</span><span>关联单号 / 任务</span><span>点数变动</span></div>
-        {visibleRecords.map((record) => <div className="transaction-row" role="row" key={record.id}><time>{record.occurred_at}</time><strong className="transaction-type">{record.type}</strong><span className="transaction-reference"><strong>{record.reference}</strong><small>{record.id} · {record.detail}</small></span><strong className={`transaction-amount ${record.amount > 0 ? "credit" : "debit"}`}>{record.amount > 0 ? "+" : ""}{record.amount.toLocaleString()} 点</strong></div>)}
+        {visibleRecords.map((record) => <div className="transaction-row" role="row" key={record.id}><time dateTime={record.occurred_at}>{formatDateTime(record.occurred_at)}</time><strong className="transaction-type">{record.type}</strong><span className="transaction-reference"><strong>{record.reference}</strong><small>{record.id} · {record.detail}</small></span><strong className={`transaction-amount ${record.amount > 0 ? "credit" : "debit"}`}>{record.amount > 0 ? "+" : ""}{record.amount.toLocaleString()} 点</strong></div>)}
       </div>
       <Pagination total={records.length} page={page} onPageChange={setPage} pageSize={pageSize} />
     </article>
@@ -341,7 +363,7 @@ function TaskCenterV2({ tasks, setTasks, setView, onToast }) {
       <div className="task-toolbar"><div className="filters">{[["all", "全部"], ["generating", "生成中"], ["queued", "排队中"], ["done", "已完成"]].map(([value, label]) => <button key={value} className={filter === value ? "active" : ""} onClick={() => setFilter(value)}>{label}<span>{value === "all" ? tasks.length : tasks.filter((task) => task.status === value).length}</span></button>)}</div><label className="search"><IconSearch size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索任务" /></label></div>
       <div className="task-table">
         <div className="task-table-head"><span>任务</span><span>状态</span><span>消耗点数</span><span>创建时间</span><span>操作</span></div>
-        {visibleTasks.length ? visibleTasks.map((task) => <article className="task-row" key={task.id}><div className="task-info"><div className="task-thumb"><img src={task.image} alt="" /><button className={task.status === "done" ? "" : "pending"} aria-label={`播放 ${task.title}`} onClick={() => openPreview(task)}><IconPlayerPlayFilled size={17} /></button></div><span><strong>{task.title}</strong><small>{task.meta}</small></span></div><div className="task-status"><span className={`status-pill ${task.status}`}>{task.status === "generating" && <IconRefresh className="spin" size={14} />}{task.status === "queued" && <IconClock size={14} />}{task.status === "done" && <IconCheck size={14} />}{statusText[task.status]}{task.status === "generating" ? ` ${task.progress}%` : ""}</span>{task.status === "generating" && <div className="table-progress"><i style={{ width: `${task.progress}%` }} /></div>}</div><span className="task-cost"><IconCoin size={15} />{task.cost ?? "—"}</span><span className="created-time">{task.created}</span><div className="row-actions">{task.status === "done" ? <button title="下载"><IconDownload size={18} /></button> : <button title="复制任务" onClick={() => onToast("任务参数已复制")}><IconCopy size={18} /></button>}<button title="删除" onClick={() => deleteTask(task.id)}><IconTrash size={18} /></button></div></article>) : <div className="empty-state"><span className="empty-icon"><IconChecklist size={32} /></span><strong>{tasks.length ? "没有匹配的任务" : "还没有创作任务"}</strong><span>{tasks.length ? "换个筛选条件，或清除搜索内容后再试。" : "提交第一个创作后，可以在这里追踪进度和结果。"}</span><button className="empty-action" onClick={() => tasks.length ? (setFilter("all"), setQuery("")) : setView("home")}>{tasks.length ? "清除筛选" : "开始第一次创作"}</button></div>}
+        {visibleTasks.length ? visibleTasks.map((task) => <article className="task-row" key={task.id}><div className="task-info"><div className="task-thumb"><img src={taskThumbnail(task)} alt="" /><button className={task.status === "done" ? "" : "pending"} aria-label={`播放 ${task.title}`} onClick={() => openPreview(task)}><IconPlayerPlayFilled size={17} /></button></div><span><strong>{task.title}</strong><small>{taskMeta(task)}</small></span></div><div className="task-status"><span className={`status-pill ${task.status}`}>{task.status === "generating" && <IconRefresh className="spin" size={14} />}{task.status === "queued" && <IconClock size={14} />}{task.status === "done" && <IconCheck size={14} />}{statusText[task.status]}{task.status === "generating" ? ` ${task.progress}%` : ""}</span>{task.status === "generating" && <div className="table-progress"><i style={{ width: `${task.progress}%` }} /></div>}</div><span className="task-cost"><IconCoin size={15} />{task.cost ?? "—"}</span><span className="created-time">{taskCreatedLabel(task)}</span><div className="row-actions">{task.status === "done" ? <button title="下载"><IconDownload size={18} /></button> : <button title="复制任务" onClick={() => onToast("任务参数已复制")}><IconCopy size={18} /></button>}<button title="删除" onClick={() => deleteTask(task.id)}><IconTrash size={18} /></button></div></article>) : <div className="empty-state"><span className="empty-icon"><IconChecklist size={32} /></span><strong>{tasks.length ? "没有匹配的任务" : "还没有创作任务"}</strong><span>{tasks.length ? "换个筛选条件，或清除搜索内容后再试。" : "提交第一个创作后，可以在这里追踪进度和结果。"}</span><button className="empty-action" onClick={() => tasks.length ? (setFilter("all"), setQuery("")) : setView("home")}>{tasks.length ? "清除筛选" : "开始第一次创作"}</button></div>}
         <Pagination total={filtered.length} page={page} onPageChange={setPage} pageSize={pageSize} />
       </div>
       {previewTask && <VideoPreviewDialog task={previewTask} onClose={() => setPreviewTask(null)} />}

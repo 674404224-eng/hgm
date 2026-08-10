@@ -1,6 +1,6 @@
 # 策量智算 Video Studio
 
-面向 AI 视频与图片生成的前端联调项目。当前版本已经从纯 HTML 原型升级为可直接联调的 React + TypeScript 应用，内置 Mock 数据层，并提供可供后端直接实现的 OpenAPI 3.1 契约。
+面向 AI 视频与图片生成的前端联调项目。当前版本已经从纯 HTML 原型升级为可直接联调的 React + TypeScript 应用，内置 Mock 数据层，并提供 OpenAPI 3.1 / API 1.1.0 P0 冻结契约。
 
 ## 技术栈
 
@@ -42,6 +42,7 @@ VITE_API_BASE_URL=http://localhost:8080/api/v1
 然后重新启动开发服务。接口约定见：
 
 - `openapi/openapi.json`：OpenAPI 3.1 接口文档
+- `docs/API_REFERENCE.md`：后端快速联调参考与请求响应示例
 - `docs/BACKEND_INTEGRATION.md`：联调说明与安全边界
 - `docs/PRD_V2.0_BACKEND_READY.md`：后端可执行版 PRD
 - `docs/AGENT_ORCHESTRATION_BACKEND_DESIGN.md`：视频生成 Agent 编排后端设计

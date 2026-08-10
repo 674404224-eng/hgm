@@ -1,10 +1,10 @@
 # 第一期平台模型与凭证管理决策
 
-> 文档版本：V1.0
+> 文档版本：V1.1
 >
 > 决策状态：已确认，作为第一期开发基线
 >
-> 更新日期：2026-08-09
+> 更新日期：2026-08-10
 > 适用范围：Web 前台、用户中心、模型目录、任务创建、计费和供应商调用
 
 ## 1. 决策摘要
@@ -140,7 +140,7 @@ POST   /providers/{provider_id}/verify
 | id | 对用户稳定的 `model_id` |
 | credential_id | 内部凭证关联，不向用户返回 |
 | provider_model_key | 供应商真实模型标识 |
-| display_name / provider_name | 用户展示字段 |
+| name / provider_name | 用户展示字段，与 OpenAPI 1.1.0 保持一致 |
 | mode | video / image |
 | capabilities | 画幅、分辨率、时长、音频和素材能力 |
 | pricing_rule | 服务端点数价格规则 |
@@ -218,6 +218,8 @@ POST   /providers/{provider_id}/verify
 - [ ] 浏览器请求和构建产物不存在 API Key、Endpoint 或凭证标识。
 - [ ] `GET /models` 只返回公开模型目录。
 - [ ] `POST /tasks` 必须使用 `model_id`，任意模型名无法绕过校验。
+- [ ] `Task.parameters` 仅回显用户确认并经平台终审的公开参数，不包含 Provider 内部请求或凭证引用。
+- [ ] `TaskResult.items[]` 只返回短期签名媒体地址，不暴露供应商原始地址。
 - [ ] 停用或维护中的模型不能创建新任务。
 - [ ] 模型不可用时不静默切换。
 - [ ] Agent 无权读取 Provider Key、修改余额或替换用户模型。

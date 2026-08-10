@@ -1,13 +1,14 @@
 # 策量智算 · AI 内容创作平台 PRD
 
-> 文档版本：V2.0（后端开发版）  
+> 文档版本：V2.1（P0 契约冻结版）
 > 文档状态：开发基线  
-> 更新日期：2026-08-09
+> 更新日期：2026-08-10
 >
 > 产品范围：Web 端 AI 视频/图片生成、任务中心、账户、创作点、平台模型目录
 > 交互基线：当前 `策量智算_HTML原型_V1.2` 运行结果  
 > 接口基线：[`openapi/openapi.json`](../openapi/openapi.json)  
 > 联调说明：[`docs/BACKEND_INTEGRATION.md`](./BACKEND_INTEGRATION.md)
+> API 快速参考：[`docs/API_REFERENCE.md`](./API_REFERENCE.md)
 > 一期模型政策：[`docs/PHASE1_PLATFORM_MODEL_POLICY.md`](./PHASE1_PLATFORM_MODEL_POLICY.md)
 
 ## 0. 文档使用规则
@@ -201,7 +202,7 @@ AID 推荐格式为 `clzs-` 加 16～24 位随机 Base32 字符；不得包含�
 | id | uuid | 内部主键 |
 | credential_id | uuid | 外键、索引，仅内部可见 |
 | model_key | varchar(100) | 实际供应商模型标识 |
-| display_name | varchar(100) | 前端展示名 |
+| display_name | varchar(100) | 平台内部展示名，对外映射为 OpenAPI `Model.name` |
 | mode | varchar(10) | video / image |
 | capabilities | jsonb | 支持的画幅、分辨率、时长、音频、水印等 |
 | pricing_rule | jsonb | 服务端计价规则 |
@@ -497,7 +498,7 @@ stateDiagram-v2
 ### 5.11 结果播放与下载
 
 - 仅 `done` 状态允许调用 `GET /tasks/{task_id}/result`。
-- 返回短期 `playback_url`、可选 `download_url`、`poster_url`、真实 `media_type` 和 `expires_at`。
+- 返回 `TaskResult.items[]`；每项包含短期 `playback_url`、可选 `download_url`、`poster_url` 和真实 `media_type`，顶层返回统一 `expires_at`。
 - URL 默认 10 分钟有效，来自私有 CDN/对象存储；不得返回永久公开地址。
 - 视频结果返回可 Range 请求的 `video/mp4` 或实际格式；图片结果返回相应图片 MIME。
 - 地址过期后前端重新请求结果接口；不复用或刷新旧签名。
@@ -525,21 +526,21 @@ stateDiagram-v2
 | 删除任务 | DELETE `/tasks/{id}` | 状态冲突、软删除 | 204 |
 | 任务结果 | GET `/tasks/{id}/result` | 完成态、短期签名 | TaskResult |
 
-### 6.2 OpenAPI 上线前必须补齐的字段
+### 6.2 OpenAPI P0 冻结字段
 
-当前契约可启动联调，但后端正式开发时应在不破坏现有字段的前提下补齐：
+OpenAPI 1.1.0 已完成以下 P0 契约收敛，前后端不得再使用旧字段：
 
-- `Account.phone` 仅代表当前会话用户本人的手机号；接口说明需明确该字段属于敏感数据，禁止缓存到共享客户端、日志或埋点。
-- `Model` 使用稳定 `id`，并返回 `display_name/provider_name/mode/status/capabilities/base_points`；不返回凭证或内部连接 ID。
+- `Account.phone` 明确为当前会话用户本人的敏感数据，禁止写入共享缓存、日志或埋点。
+- `Model` 使用稳定 `id`，返回 `name/provider_name/mode/status/capabilities/base_points`，不返回凭证或内部连接 ID。
 - `CreateTaskRequest.model_id` 必须来自 `GET /models`；不接受模型名称、Provider ID、Endpoint 或 API Key。
 - 图片模式 `count` 必须与所选模型 `capabilities.counts` 匹配。
-- `Task.created` 改为 RFC 3339 的 `created_at`；`meta` 拆为结构化参数；保留旧字段时标记 deprecated。
-- `Task` 增加 `mode`、`model_id`、`finished_at`、结构化 `error`。
-- `TaskResult` 对多图片结果支持 `items[]`；当前单结果字段兼容保留。
-- `PageMeta` 可增加 `has_next`；服务端仍以 `total` 作为权威。
-- 所有 2xx 响应返回 `X-Request-ID` 响应头；所有 429 响应提供 `Retry-After`。
+- `Task` 使用 RFC 3339 的 `created_at`、`finished_at`，并包含 `mode`、`model_id`、结构化 `parameters` 和结构化 `error`。
+- 旧的 `Task.meta`、`Task.created` 和 `Task.image` 已移除；展示摘要由前端根据 `parameters` 组合，缩略图使用 `thumbnail_url`。
+- 视频和多图片结果统一使用 `TaskResult.items[]`，每项包含独立媒体类型及短期播放/下载地址。
+- `PageMeta` 必须返回 `has_next`，同时保留 `total` 作为权威总数。
+- 所有 2xx 和统一错误响应返回 `X-Request-ID`；所有 429 响应提供 `Retry-After`。
 
-这些补齐属于 P0 契约完善，不改变当前页面信息架构。
+后续新增字段优先保持向后兼容；删除字段、修改枚举或改变必填性必须提升接口版本，并同步生成类型、本文和 API 参考。
 
 ## 7. 统一错误协议
 

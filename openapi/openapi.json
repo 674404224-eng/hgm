@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "策量智算 Video Studio API",
-    "version": "1.0.0",
-    "description": "前后端联调契约。所有时间使用 RFC 3339；金额单位为创作点；一期模型凭证仅由平台在服务端托管，用户端不接收或管理第三方 API Key。"
+    "version": "1.1.0",
+    "description": "P0 冻结版前后端联调契约。所有时间使用 RFC 3339；金额单位为创作点；一期模型凭证仅由平台在服务端托管，用户端不接收或管理第三方 API Key。"
   },
   "servers": [
     { "url": "http://localhost:8080/api/v1", "description": "本地联调" },
@@ -17,84 +17,89 @@
       "post": {
         "tags": ["Auth"], "summary": "发送短信验证码", "security": [],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SendSmsCodeRequest" } } } },
-        "responses": { "200": { "description": "已发送", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SendSmsCodeResponse" } } } }, "429": { "$ref": "#/components/responses/TooManyRequests" }, "default": { "$ref": "#/components/responses/Error" } }
+        "responses": { "200": { "description": "已发送", "headers": { "X-Request-ID": { "$ref": "#/components/headers/RequestId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SendSmsCodeResponse" } } } }, "429": { "$ref": "#/components/responses/TooManyRequests" }, "default": { "$ref": "#/components/responses/Error" } }
       }
     },
     "/auth/sessions": {
       "post": {
         "tags": ["Auth"], "summary": "手机号验证码登录", "security": [],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginRequest" } } } },
-        "responses": { "200": { "description": "登录成功；刷新令牌建议通过 HttpOnly Cookie 下发", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Session" } } } }, "default": { "$ref": "#/components/responses/Error" } }
+        "responses": { "200": { "description": "登录成功；刷新令牌通过 HttpOnly Cookie 下发", "headers": { "X-Request-ID": { "$ref": "#/components/headers/RequestId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Session" } } } }, "default": { "$ref": "#/components/responses/Error" } }
       }
     },
     "/auth/sessions/refresh": {
       "post": {
         "tags": ["Auth"], "summary": "使用 HttpOnly Cookie 刷新会话", "security": [],
-        "responses": { "200": { "description": "刷新成功", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Session" } } } }, "401": { "$ref": "#/components/responses/Error" }, "default": { "$ref": "#/components/responses/Error" } }
+        "responses": { "200": { "description": "刷新成功", "headers": { "X-Request-ID": { "$ref": "#/components/headers/RequestId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Session" } } } }, "401": { "$ref": "#/components/responses/Error" }, "default": { "$ref": "#/components/responses/Error" } }
       }
     },
     "/auth/session": {
-      "delete": { "tags": ["Auth"], "summary": "退出登录", "responses": { "204": { "description": "已退出" }, "default": { "$ref": "#/components/responses/Error" } } }
+      "delete": { "tags": ["Auth"], "summary": "退出登录", "responses": { "204": { "description": "已退出", "headers": { "X-Request-ID": { "$ref": "#/components/headers/RequestId" } } }, "default": { "$ref": "#/components/responses/Error" } } }
     },
     "/me": {
-      "get": { "tags": ["Account"], "summary": "读取当前账户", "responses": { "200": { "description": "账户信息", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Account" } } } }, "default": { "$ref": "#/components/responses/Error" } } }
+      "get": { "tags": ["Account"], "summary": "读取当前账户", "responses": { "200": { "description": "账户信息", "headers": { "X-Request-ID": { "$ref": "#/components/headers/RequestId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Account" } } } }, "default": { "$ref": "#/components/responses/Error" } } }
     },
     "/wallet": {
-      "get": { "tags": ["Wallet"], "summary": "读取创作点余额", "responses": { "200": { "description": "余额与用量", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Wallet" } } } }, "default": { "$ref": "#/components/responses/Error" } } }
+      "get": { "tags": ["Wallet"], "summary": "读取创作点余额", "responses": { "200": { "description": "余额与用量", "headers": { "X-Request-ID": { "$ref": "#/components/headers/RequestId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Wallet" } } } }, "default": { "$ref": "#/components/responses/Error" } } }
     },
     "/wallet/transactions": {
       "get": {
         "tags": ["Wallet"], "summary": "分页读取交易记录",
         "parameters": [ { "$ref": "#/components/parameters/Page" }, { "$ref": "#/components/parameters/PageSize" } ],
-        "responses": { "200": { "description": "交易记录分页", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TransactionPage" } } } }, "default": { "$ref": "#/components/responses/Error" } }
+        "responses": { "200": { "description": "交易记录分页", "headers": { "X-Request-ID": { "$ref": "#/components/headers/RequestId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TransactionPage" } } } }, "default": { "$ref": "#/components/responses/Error" } }
       }
     },
     "/models": {
-      "get": { "tags": ["Models"], "summary": "读取平台开放模型", "description": "仅返回平台已配置且可向当前用户开放的模型目录，不返回供应商凭证或内部连接信息。", "responses": { "200": { "description": "平台模型目录", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ModelList" } } } }, "default": { "$ref": "#/components/responses/Error" } } }
+      "get": { "tags": ["Models"], "summary": "读取平台开放模型", "description": "仅返回平台已配置且可向当前用户开放的模型目录，不返回供应商凭证或内部连接信息。", "responses": { "200": { "description": "平台模型目录", "headers": { "X-Request-ID": { "$ref": "#/components/headers/RequestId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ModelList" } } } }, "default": { "$ref": "#/components/responses/Error" } } }
     },
     "/uploads/presign": {
       "post": {
         "tags": ["Uploads"], "summary": "获取素材直传凭证",
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PresignUploadRequest" } } } },
-        "responses": { "200": { "description": "短期上传地址", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PresignUploadResponse" } } } }, "413": { "$ref": "#/components/responses/PayloadTooLarge" }, "default": { "$ref": "#/components/responses/Error" } }
+        "responses": { "200": { "description": "短期上传地址", "headers": { "X-Request-ID": { "$ref": "#/components/headers/RequestId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PresignUploadResponse" } } } }, "413": { "$ref": "#/components/responses/PayloadTooLarge" }, "default": { "$ref": "#/components/responses/Error" } }
       }
     },
     "/tasks": {
       "get": {
         "tags": ["Tasks"], "summary": "分页读取任务",
         "parameters": [ { "$ref": "#/components/parameters/Page" }, { "$ref": "#/components/parameters/PageSize" }, { "name": "status", "in": "query", "schema": { "$ref": "#/components/schemas/TaskStatus" } }, { "name": "q", "in": "query", "schema": { "type": "string", "maxLength": 100 } } ],
-        "responses": { "200": { "description": "任务分页", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TaskPage" } } } }, "default": { "$ref": "#/components/responses/Error" } }
+        "responses": { "200": { "description": "任务分页", "headers": { "X-Request-ID": { "$ref": "#/components/headers/RequestId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TaskPage" } } } }, "default": { "$ref": "#/components/responses/Error" } }
       },
       "post": {
         "tags": ["Tasks"], "summary": "创建生成任务", "description": "必须携带 Idempotency-Key，扣点和任务创建需在同一事务或可补偿事务中完成。",
         "parameters": [ { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "format": "uuid" } } ],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateTaskRequest" } } } },
-        "responses": { "201": { "description": "任务已创建", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Task" } } } }, "402": { "$ref": "#/components/responses/InsufficientBalance" }, "409": { "$ref": "#/components/responses/Conflict" }, "default": { "$ref": "#/components/responses/Error" } }
+        "responses": { "201": { "description": "任务已创建", "headers": { "X-Request-ID": { "$ref": "#/components/headers/RequestId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Task" } } } }, "402": { "$ref": "#/components/responses/InsufficientBalance" }, "409": { "$ref": "#/components/responses/Conflict" }, "default": { "$ref": "#/components/responses/Error" } }
       }
     },
     "/tasks/{task_id}": {
       "parameters": [ { "$ref": "#/components/parameters/TaskId" } ],
-      "get": { "tags": ["Tasks"], "summary": "读取任务详情", "responses": { "200": { "description": "任务详情", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Task" } } } }, "default": { "$ref": "#/components/responses/Error" } } },
-      "delete": { "tags": ["Tasks"], "summary": "删除任务记录", "responses": { "204": { "description": "已删除" }, "409": { "$ref": "#/components/responses/Conflict" }, "default": { "$ref": "#/components/responses/Error" } } }
+      "get": { "tags": ["Tasks"], "summary": "读取任务详情", "responses": { "200": { "description": "任务详情", "headers": { "X-Request-ID": { "$ref": "#/components/headers/RequestId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Task" } } } }, "default": { "$ref": "#/components/responses/Error" } } },
+      "delete": { "tags": ["Tasks"], "summary": "删除任务记录", "responses": { "204": { "description": "已删除", "headers": { "X-Request-ID": { "$ref": "#/components/headers/RequestId" } } }, "409": { "$ref": "#/components/responses/Conflict" }, "default": { "$ref": "#/components/responses/Error" } } }
     },
     "/tasks/{task_id}/result": {
       "parameters": [ { "$ref": "#/components/parameters/TaskId" } ],
-      "get": { "tags": ["Tasks"], "summary": "获取短期播放与下载地址", "responses": { "200": { "description": "结果地址", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TaskResult" } } } }, "409": { "$ref": "#/components/responses/Conflict" }, "default": { "$ref": "#/components/responses/Error" } } }
+      "get": { "tags": ["Tasks"], "summary": "获取短期播放与下载地址", "responses": { "200": { "description": "结果地址", "headers": { "X-Request-ID": { "$ref": "#/components/headers/RequestId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TaskResult" } } } }, "409": { "$ref": "#/components/responses/Conflict" }, "410": { "$ref": "#/components/responses/ResultExpired" }, "default": { "$ref": "#/components/responses/Error" } } }
     }
   },
   "components": {
     "securitySchemes": { "bearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" } },
+    "headers": {
+      "RequestId": { "description": "全链路请求标识；服务端应原样返回客户端传入值或生成新值", "schema": { "type": "string" } },
+      "RetryAfter": { "description": "建议客户端等待秒数", "schema": { "type": "integer", "minimum": 1 } }
+    },
     "parameters": {
       "Page": { "name": "page", "in": "query", "schema": { "type": "integer", "minimum": 1, "default": 1 } },
       "PageSize": { "name": "page_size", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 } },
       "TaskId": { "name": "task_id", "in": "path", "required": true, "schema": { "type": "string" } }
     },
     "responses": {
-      "Error": { "description": "统一错误", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
-      "TooManyRequests": { "description": "请求过于频繁", "headers": { "Retry-After": { "schema": { "type": "integer" } } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
-      "Conflict": { "description": "资源状态冲突", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
-      "PayloadTooLarge": { "description": "文件过大", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
-      "InsufficientBalance": { "description": "创作点不足", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+      "Error": { "description": "统一错误", "headers": { "X-Request-ID": { "$ref": "#/components/headers/RequestId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "TooManyRequests": { "description": "请求过于频繁", "headers": { "X-Request-ID": { "$ref": "#/components/headers/RequestId" }, "Retry-After": { "$ref": "#/components/headers/RetryAfter" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "Conflict": { "description": "资源状态冲突", "headers": { "X-Request-ID": { "$ref": "#/components/headers/RequestId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "PayloadTooLarge": { "description": "文件过大", "headers": { "X-Request-ID": { "$ref": "#/components/headers/RequestId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "InsufficientBalance": { "description": "创作点不足", "headers": { "X-Request-ID": { "$ref": "#/components/headers/RequestId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "ResultExpired": { "description": "任务结果已过期或被清理", "headers": { "X-Request-ID": { "$ref": "#/components/headers/RequestId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
     },
     "schemas": {
       "Error": { "type": "object", "required": ["code", "message", "request_id"], "properties": { "code": { "type": "string", "examples": ["INSUFFICIENT_BALANCE"] }, "message": { "type": "string" }, "request_id": { "type": "string" }, "details": { "type": ["object", "null"], "additionalProperties": true } } },
@@ -102,21 +107,24 @@
       "SendSmsCodeResponse": { "type": "object", "required": ["request_id", "expires_in"], "properties": { "request_id": { "type": "string" }, "expires_in": { "type": "integer", "examples": [300] } } },
       "LoginRequest": { "type": "object", "required": ["phone", "code"], "properties": { "phone": { "type": "string", "pattern": "^1[0-9]{10}$" }, "code": { "type": "string", "pattern": "^[0-9]{6}$" } } },
       "Session": { "type": "object", "required": ["access_token", "expires_in", "user"], "properties": { "access_token": { "type": "string" }, "expires_in": { "type": "integer" }, "user": { "$ref": "#/components/schemas/Account" } } },
-      "Account": { "type": "object", "required": ["aid", "name", "phone", "avatar_seed"], "properties": { "aid": { "type": "string", "readOnly": true, "examples": ["clzs-7F3A9C2E-20260808"] }, "name": { "type": "string" }, "phone": { "type": "string" }, "email": { "type": ["string", "null"], "format": "email" }, "avatar_seed": { "type": "integer", "minimum": 0 } } },
+      "Account": { "type": "object", "required": ["aid", "name", "phone", "avatar_seed"], "properties": { "aid": { "type": "string", "readOnly": true, "description": "系统生成且不可修改的唯一用户标识；不得包含手机号、日期或自增 ID", "pattern": "^clzs-[A-Z2-7]{16,24}$", "examples": ["clzs-7F3A2C2EABCD5672"] }, "name": { "type": "string" }, "phone": { "type": "string", "description": "仅返回当前会话用户本人的敏感字段；禁止写入共享缓存、日志或埋点", "pattern": "^1[0-9]{10}$" }, "email": { "type": ["string", "null"], "format": "email" }, "avatar_seed": { "type": "integer", "minimum": 0 } } },
       "Wallet": { "type": "object", "required": ["available", "used_this_month", "usage_percent"], "properties": { "available": { "type": "integer", "minimum": 0 }, "used_this_month": { "type": "integer", "minimum": 0 }, "usage_percent": { "type": "number", "minimum": 0, "maximum": 100 } } },
       "Transaction": { "type": "object", "required": ["id", "occurred_at", "type", "reference", "amount"], "properties": { "id": { "type": "string" }, "occurred_at": { "type": "string", "format": "date-time" }, "type": { "type": "string", "enum": ["任务消耗", "套餐发放", "活动奖励", "失败退款", "人工调整"] }, "reference": { "type": "string" }, "detail": { "type": "string" }, "amount": { "type": "integer", "description": "正数入账，负数扣减" } } },
-      "TransactionPage": { "allOf": [ { "$ref": "#/components/schemas/PageMeta" }, { "type": "object", "properties": { "items": { "type": "array", "items": { "$ref": "#/components/schemas/Transaction" } } } } ] },
+      "TransactionPage": { "allOf": [ { "$ref": "#/components/schemas/PageMeta" }, { "type": "object", "required": ["items"], "properties": { "items": { "type": "array", "items": { "$ref": "#/components/schemas/Transaction" } } } } ] },
       "ModelCapabilities": { "type": "object", "required": ["aspects", "resolutions"], "properties": { "aspects": { "type": "array", "items": { "type": "string", "enum": ["16:9", "9:16", "1:1", "4:3"] } }, "resolutions": { "type": "array", "items": { "type": "string" } }, "durations": { "type": "array", "items": { "type": "integer", "enum": [5, 10, 15, 30] } }, "counts": { "type": "array", "items": { "type": "integer", "enum": [1, 2, 4] } }, "sound": { "type": "boolean" }, "watermark": { "type": "boolean" }, "reference_image": { "type": "boolean" }, "reference_video": { "type": "boolean" } } },
       "Model": { "type": "object", "required": ["id", "name", "provider_name", "mode", "status", "base_points", "capabilities"], "properties": { "id": { "type": "string", "description": "平台稳定模型标识，创建任务时提交该值" }, "name": { "type": "string" }, "provider_name": { "type": "string" }, "mode": { "type": "string", "enum": ["video", "image"] }, "status": { "type": "string", "enum": ["available", "maintenance", "disabled"] }, "base_points": { "type": "integer", "minimum": 0 }, "capabilities": { "$ref": "#/components/schemas/ModelCapabilities" } } },
       "ModelList": { "type": "object", "required": ["items", "total"], "properties": { "items": { "type": "array", "items": { "$ref": "#/components/schemas/Model" } }, "total": { "type": "integer" } } },
       "PresignUploadRequest": { "type": "object", "required": ["file_name", "content_type", "size"], "properties": { "file_name": { "type": "string" }, "content_type": { "type": "string", "enum": ["image/png", "image/jpeg", "image/webp", "video/mp4", "video/webm"] }, "size": { "type": "integer", "minimum": 1, "maximum": 524288000 } } },
       "PresignUploadResponse": { "type": "object", "required": ["asset_id", "upload_url", "headers", "expires_in"], "properties": { "asset_id": { "type": "string" }, "upload_url": { "type": "string", "format": "uri" }, "headers": { "type": "object", "additionalProperties": { "type": "string" } }, "expires_in": { "type": "integer" } } },
       "TaskStatus": { "type": "string", "enum": ["queued", "generating", "done", "failed", "cancelled"] },
-      "CreateTaskRequest": { "type": "object", "required": ["prompt", "mode", "model_id", "aspect", "resolution", "max_points"], "properties": { "prompt": { "type": "string", "minLength": 1, "maxLength": 1000 }, "mode": { "type": "string", "enum": ["video", "image"] }, "model_id": { "type": "string", "description": "来自 GET /models 的平台模型标识" }, "aspect": { "type": "string", "enum": ["16:9", "9:16", "1:1", "4:3"] }, "resolution": { "type": "string" }, "duration": { "type": "string", "enum": ["5s", "10s", "15s", "30s"] }, "count": { "type": "integer", "enum": [1, 2, 4] }, "sound": { "type": "boolean" }, "watermark": { "type": "string", "maxLength": 20 }, "reference_asset_id": { "type": "string" }, "max_points": { "type": "integer", "minimum": 0, "description": "用户确认的本次最高创作点；最终价格由服务端计算且不得超过该值" } } },
-      "Task": { "type": "object", "required": ["id", "title", "meta", "cost", "status", "progress", "created"], "properties": { "id": { "type": "string" }, "title": { "type": "string" }, "mode": { "type": "string", "enum": ["video", "image"] }, "model_id": { "type": "string" }, "meta": { "type": "string" }, "cost": { "type": "integer" }, "status": { "$ref": "#/components/schemas/TaskStatus" }, "progress": { "type": "integer", "minimum": 0, "maximum": 100 }, "image": { "type": "string" }, "created": { "type": "string" }, "error": { "type": ["string", "null"] } } },
-      "TaskPage": { "allOf": [ { "$ref": "#/components/schemas/PageMeta" }, { "type": "object", "properties": { "items": { "type": "array", "items": { "$ref": "#/components/schemas/Task" } } } } ] },
-      "TaskResult": { "type": "object", "required": ["playback_url", "media_type", "expires_at"], "properties": { "playback_url": { "type": "string", "format": "uri" }, "download_url": { "type": "string", "format": "uri" }, "poster_url": { "type": "string", "format": "uri" }, "media_type": { "type": "string", "examples": ["video/mp4"] }, "expires_at": { "type": "string", "format": "date-time" } } },
-      "PageMeta": { "type": "object", "required": ["page", "page_size", "total"], "properties": { "page": { "type": "integer" }, "page_size": { "type": "integer" }, "total": { "type": "integer" } } }
+      "CreateTaskRequest": { "type": "object", "required": ["prompt", "mode", "model_id", "aspect", "resolution", "max_points"], "properties": { "prompt": { "type": "string", "minLength": 1, "maxLength": 1000 }, "mode": { "type": "string", "enum": ["video", "image"] }, "model_id": { "type": "string", "description": "来自 GET /models 的平台稳定模型标识；后端不得替用户二次路由" }, "aspect": { "type": "string", "enum": ["16:9", "9:16", "1:1", "4:3"] }, "resolution": { "type": "string" }, "duration": { "type": "string", "enum": ["5s", "10s", "15s", "30s"] }, "count": { "type": "integer", "enum": [1, 2, 4] }, "sound": { "type": "boolean" }, "watermark": { "type": "string", "maxLength": 20 }, "reference_asset_id": { "type": "string" }, "max_points": { "type": "integer", "minimum": 0, "description": "用户确认的本次最高创作点；最终价格由服务端计算且不得超过该值" } } },
+      "TaskParameters": { "type": "object", "required": ["aspect", "resolution"], "properties": { "aspect": { "type": "string", "enum": ["16:9", "9:16", "1:1", "4:3"] }, "resolution": { "type": "string" }, "duration": { "type": "string", "enum": ["5s", "10s", "15s", "30s"] }, "count": { "type": "integer", "enum": [1, 2, 4] }, "sound": { "type": "boolean" }, "watermark": { "type": ["string", "null"], "maxLength": 20 }, "reference_asset_id": { "type": ["string", "null"] } } },
+      "TaskError": { "type": "object", "required": ["code", "message", "retryable"], "properties": { "code": { "type": "string", "examples": ["PROVIDER_TIMEOUT"] }, "message": { "type": "string" }, "retryable": { "type": "boolean" }, "details": { "type": ["object", "null"], "additionalProperties": true } } },
+      "Task": { "type": "object", "required": ["id", "title", "mode", "model_id", "parameters", "cost", "status", "progress", "created_at"], "properties": { "id": { "type": "string" }, "title": { "type": "string" }, "mode": { "type": "string", "enum": ["video", "image"] }, "model_id": { "type": "string" }, "parameters": { "$ref": "#/components/schemas/TaskParameters" }, "cost": { "type": "integer", "minimum": 0 }, "status": { "$ref": "#/components/schemas/TaskStatus" }, "progress": { "type": "integer", "minimum": 0, "maximum": 100 }, "thumbnail_url": { "type": ["string", "null"], "format": "uri-reference" }, "created_at": { "type": "string", "format": "date-time" }, "finished_at": { "type": ["string", "null"], "format": "date-time" }, "error": { "oneOf": [ { "$ref": "#/components/schemas/TaskError" }, { "type": "null" } ] } } },
+      "TaskPage": { "allOf": [ { "$ref": "#/components/schemas/PageMeta" }, { "type": "object", "required": ["items"], "properties": { "items": { "type": "array", "items": { "$ref": "#/components/schemas/Task" } } } } ] },
+      "TaskResultItem": { "type": "object", "required": ["playback_url", "media_type"], "properties": { "id": { "type": "string" }, "playback_url": { "type": "string", "format": "uri" }, "download_url": { "type": "string", "format": "uri" }, "poster_url": { "type": "string", "format": "uri" }, "media_type": { "type": "string", "examples": ["video/mp4"] }, "width": { "type": "integer", "minimum": 1 }, "height": { "type": "integer", "minimum": 1 }, "duration_seconds": { "type": "number", "minimum": 0 } } },
+      "TaskResult": { "type": "object", "required": ["task_id", "items", "expires_at"], "properties": { "task_id": { "type": "string" }, "items": { "type": "array", "minItems": 1, "items": { "$ref": "#/components/schemas/TaskResultItem" } }, "expires_at": { "type": "string", "format": "date-time" } } },
+      "PageMeta": { "type": "object", "required": ["page", "page_size", "total", "has_next"], "properties": { "page": { "type": "integer", "minimum": 1 }, "page_size": { "type": "integer", "minimum": 1, "maximum": 100 }, "total": { "type": "integer", "minimum": 0 }, "has_next": { "type": "boolean" } } }
     }
   },
   "security": [ { "bearerAuth": [] } ]

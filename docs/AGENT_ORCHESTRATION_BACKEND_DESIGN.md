@@ -1,10 +1,10 @@
 # 视频生成 Agent 编排后端设计
 
-> 文档版本：V1.0  
+> 文档版本：V1.1
 > 文档状态：后端技术评审稿  
-> 更新日期：2026-08-08  
+> 更新日期：2026-08-10
 > 目标读者：后端、算法、架构、测试、运维  
-> 关联文档：`PRD_V2.0_BACKEND_READY.md`、`openapi/openapi.json`
+> 关联文档：`PRD_V2.0_BACKEND_READY.md`、`API_REFERENCE.md`、`openapi/openapi.json`
 
 ## 1. 结论与架构决策
 
@@ -214,6 +214,8 @@ Agent 不应直接输出某个供应商的最终请求体，而应输出供应�
 解析结果应包含内部 `credential_id`、`provider_model_id`、`adapter_type`、`provider_model_key` 和创建时能力/价格快照；除公开模型信息外均不得返回前端。
 
 如果选定模型不可用，后端返回明确错误和原因，不得静默切换到其他模型。将来若产品增加“智能匹配”，必须作为独立、显式的用户模式设计，不能改变当前默认语义。
+
+OpenAPI 1.1.0 的外部任务契约已经冻结：`Task.parameters` 是用户确认参数和平台终审结果的公开快照，`created_at/finished_at` 使用 RFC 3339，失败写入结构化 `TaskError`。Agent 内部可以产生更丰富的 `GenerationSpec`，但不得覆盖 `model_id`，也不得把内部凭证、Adapter、供应商请求体或提示词优化链路写回公开 `Task`。结果统一映射为 `TaskResult.items[]`，以兼容单视频和多图片。
 
 ### 5.4 Quality Evaluator
 

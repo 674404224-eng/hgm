@@ -30,6 +30,7 @@ export interface paths {
                 /** @description 已发送 */
                 200: {
                     headers: {
+                        "X-Request-ID": components["headers"]["RequestId"];
                         [name: string]: unknown;
                     };
                     content: {
@@ -69,9 +70,10 @@ export interface paths {
                 };
             };
             responses: {
-                /** @description 登录成功；刷新令牌建议通过 HttpOnly Cookie 下发 */
+                /** @description 登录成功；刷新令牌通过 HttpOnly Cookie 下发 */
                 200: {
                     headers: {
+                        "X-Request-ID": components["headers"]["RequestId"];
                         [name: string]: unknown;
                     };
                     content: {
@@ -109,6 +111,7 @@ export interface paths {
                 /** @description 刷新成功 */
                 200: {
                     headers: {
+                        "X-Request-ID": components["headers"]["RequestId"];
                         [name: string]: unknown;
                     };
                     content: {
@@ -148,6 +151,7 @@ export interface paths {
                 /** @description 已退出 */
                 204: {
                     headers: {
+                        "X-Request-ID": components["headers"]["RequestId"];
                         [name: string]: unknown;
                     };
                     content?: never;
@@ -180,6 +184,7 @@ export interface paths {
                 /** @description 账户信息 */
                 200: {
                     headers: {
+                        "X-Request-ID": components["headers"]["RequestId"];
                         [name: string]: unknown;
                     };
                     content: {
@@ -217,6 +222,7 @@ export interface paths {
                 /** @description 余额与用量 */
                 200: {
                     headers: {
+                        "X-Request-ID": components["headers"]["RequestId"];
                         [name: string]: unknown;
                     };
                     content: {
@@ -257,6 +263,7 @@ export interface paths {
                 /** @description 交易记录分页 */
                 200: {
                     headers: {
+                        "X-Request-ID": components["headers"]["RequestId"];
                         [name: string]: unknown;
                     };
                     content: {
@@ -297,6 +304,7 @@ export interface paths {
                 /** @description 平台模型目录 */
                 200: {
                     headers: {
+                        "X-Request-ID": components["headers"]["RequestId"];
                         [name: string]: unknown;
                     };
                     content: {
@@ -340,6 +348,7 @@ export interface paths {
                 /** @description 短期上传地址 */
                 200: {
                     headers: {
+                        "X-Request-ID": components["headers"]["RequestId"];
                         [name: string]: unknown;
                     };
                     content: {
@@ -381,6 +390,7 @@ export interface paths {
                 /** @description 任务分页 */
                 200: {
                     headers: {
+                        "X-Request-ID": components["headers"]["RequestId"];
                         [name: string]: unknown;
                     };
                     content: {
@@ -413,6 +423,7 @@ export interface paths {
                 /** @description 任务已创建 */
                 201: {
                     headers: {
+                        "X-Request-ID": components["headers"]["RequestId"];
                         [name: string]: unknown;
                     };
                     content: {
@@ -454,6 +465,7 @@ export interface paths {
                 /** @description 任务详情 */
                 200: {
                     headers: {
+                        "X-Request-ID": components["headers"]["RequestId"];
                         [name: string]: unknown;
                     };
                     content: {
@@ -480,6 +492,7 @@ export interface paths {
                 /** @description 已删除 */
                 204: {
                     headers: {
+                        "X-Request-ID": components["headers"]["RequestId"];
                         [name: string]: unknown;
                     };
                     content?: never;
@@ -517,6 +530,7 @@ export interface paths {
                 /** @description 结果地址 */
                 200: {
                     headers: {
+                        "X-Request-ID": components["headers"]["RequestId"];
                         [name: string]: unknown;
                     };
                     content: {
@@ -524,6 +538,7 @@ export interface paths {
                     };
                 };
                 409: components["responses"]["Conflict"];
+                410: components["responses"]["ResultExpired"];
                 default: components["responses"]["Error"];
             };
         };
@@ -568,9 +583,13 @@ export interface components {
             user: components["schemas"]["Account"];
         };
         Account: {
-            /** @example clzs-7F3A9C2E-20260808 */
+            /**
+             * @description 系统生成且不可修改的唯一用户标识；不得包含手机号、日期或自增 ID
+             * @example clzs-7F3A2C2EABCD5672
+             */
             readonly aid: string;
             name: string;
+            /** @description 仅返回当前会话用户本人的敏感字段；禁止写入共享缓存、日志或埋点 */
             phone: string;
             /** Format: email */
             email?: string | null;
@@ -593,7 +612,7 @@ export interface components {
             amount: number;
         };
         TransactionPage: components["schemas"]["PageMeta"] & {
-            items?: components["schemas"]["Transaction"][];
+            items: components["schemas"]["Transaction"][];
         };
         ModelCapabilities: {
             aspects: ("16:9" | "9:16" | "1:1" | "4:3")[];
@@ -642,7 +661,7 @@ export interface components {
             prompt: string;
             /** @enum {string} */
             mode: "video" | "image";
-            /** @description 来自 GET /models 的平台模型标识 */
+            /** @description 来自 GET /models 的平台稳定模型标识；后端不得替用户二次路由 */
             model_id: string;
             /** @enum {string} */
             aspect: "16:9" | "9:16" | "1:1" | "4:3";
@@ -657,24 +676,50 @@ export interface components {
             /** @description 用户确认的本次最高创作点；最终价格由服务端计算且不得超过该值 */
             max_points: number;
         };
+        TaskParameters: {
+            /** @enum {string} */
+            aspect: "16:9" | "9:16" | "1:1" | "4:3";
+            resolution: string;
+            /** @enum {string} */
+            duration?: "5s" | "10s" | "15s" | "30s";
+            /** @enum {integer} */
+            count?: 1 | 2 | 4;
+            sound?: boolean;
+            watermark?: string | null;
+            reference_asset_id?: string | null;
+        };
+        TaskError: {
+            /** @example PROVIDER_TIMEOUT */
+            code: string;
+            message: string;
+            retryable: boolean;
+            details?: {
+                [key: string]: unknown;
+            } | null;
+        };
         Task: {
             id: string;
             title: string;
             /** @enum {string} */
-            mode?: "video" | "image";
-            model_id?: string;
-            meta: string;
+            mode: "video" | "image";
+            model_id: string;
+            parameters: components["schemas"]["TaskParameters"];
             cost: number;
             status: components["schemas"]["TaskStatus"];
             progress: number;
-            image?: string;
-            created: string;
-            error?: string | null;
+            /** Format: uri-reference */
+            thumbnail_url?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            finished_at?: string | null;
+            error?: components["schemas"]["TaskError"] | null;
         };
         TaskPage: components["schemas"]["PageMeta"] & {
-            items?: components["schemas"]["Task"][];
+            items: components["schemas"]["Task"][];
         };
-        TaskResult: {
+        TaskResultItem: {
+            id?: string;
             /** Format: uri */
             playback_url: string;
             /** Format: uri */
@@ -683,6 +728,13 @@ export interface components {
             poster_url?: string;
             /** @example video/mp4 */
             media_type: string;
+            width?: number;
+            height?: number;
+            duration_seconds?: number;
+        };
+        TaskResult: {
+            task_id: string;
+            items: components["schemas"]["TaskResultItem"][];
             /** Format: date-time */
             expires_at: string;
         };
@@ -690,12 +742,14 @@ export interface components {
             page: number;
             page_size: number;
             total: number;
+            has_next: boolean;
         };
     };
     responses: {
         /** @description 统一错误 */
         Error: {
             headers: {
+                "X-Request-ID": components["headers"]["RequestId"];
                 [name: string]: unknown;
             };
             content: {
@@ -705,7 +759,8 @@ export interface components {
         /** @description 请求过于频繁 */
         TooManyRequests: {
             headers: {
-                "Retry-After"?: number;
+                "X-Request-ID": components["headers"]["RequestId"];
+                "Retry-After": components["headers"]["RetryAfter"];
                 [name: string]: unknown;
             };
             content: {
@@ -715,6 +770,7 @@ export interface components {
         /** @description 资源状态冲突 */
         Conflict: {
             headers: {
+                "X-Request-ID": components["headers"]["RequestId"];
                 [name: string]: unknown;
             };
             content: {
@@ -724,6 +780,7 @@ export interface components {
         /** @description 文件过大 */
         PayloadTooLarge: {
             headers: {
+                "X-Request-ID": components["headers"]["RequestId"];
                 [name: string]: unknown;
             };
             content: {
@@ -733,6 +790,17 @@ export interface components {
         /** @description 创作点不足 */
         InsufficientBalance: {
             headers: {
+                "X-Request-ID": components["headers"]["RequestId"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 任务结果已过期或被清理 */
+        ResultExpired: {
+            headers: {
+                "X-Request-ID": components["headers"]["RequestId"];
                 [name: string]: unknown;
             };
             content: {
@@ -746,7 +814,12 @@ export interface components {
         TaskId: string;
     };
     requestBodies: never;
-    headers: never;
+    headers: {
+        /** @description 全链路请求标识；服务端应原样返回客户端传入值或生成新值 */
+        RequestId: string;
+        /** @description 建议客户端等待秒数 */
+        RetryAfter: number;
+    };
     pathItems: never;
 }
 export type $defs = Record<string, never>;
